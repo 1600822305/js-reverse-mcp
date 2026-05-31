@@ -1,0 +1,225 @@
+syntax = "proto3";
+
+package exa.seat_management_pb;
+
+import "google/protobuf/timestamp.proto";
+
+// ==================== Enums ====================
+
+enum UserTeamStatus {
+  USER_TEAM_STATUS_UNSPECIFIED = 0;
+  USER_TEAM_STATUS_ACTIVE = 1;
+  USER_TEAM_STATUS_PENDING = 2;
+  USER_TEAM_STATUS_REMOVED = 3;
+}
+
+// ==================== Messages ====================
+
+// 用户注册
+message RegisterUserRequest {
+  string firebase_id_token = 1 [json_name = "firebase_id_token"];
+}
+
+message RegisterUserResponse {
+  string api_key = 1 [json_name = "api_key"];
+  string name = 2;
+  string api_server_url = 3 [json_name = "api_server_url"];
+  string redirect_url = 4 [json_name = "redirect_url"];
+  repeated TeamOption team_options = 5 [json_name = "team_options"];
+}
+
+// API Key 迁移
+message MigrateApiKeyRequest {
+  string api_key = 1 [json_name = "api_key"];
+}
+
+message MigrateApiKeyResponse {
+  string session_token = 1 [json_name = "session_token"];
+}
+
+// 创建 Firebase 用户
+message CreateFbUserRequest {
+  string email = 1;
+  string password = 2;
+  string turnstile_token = 3;
+  string phone_number = 4;
+  string otp_code = 5;
+  string first_name = 6;
+  string last_name = 7;
+}
+
+message CreateFbUserResponse {
+  string uid = 1;
+}
+
+// 获取主 API Key (仅开发者)
+message GetPrimaryApiKeyForDevsOnlyRequest {
+  string session_token = 1;
+}
+
+message GetPrimaryApiKeyForDevsOnlyResponse {
+  string api_key = 1;
+}
+
+// 用户角色管理
+message AddUserRoleRequest {
+  string auth_token = 1;
+  string api_key = 2;
+  string role = 3;
+  string group_id = 4;
+  string service_key = 5;
+}
+
+message AddUserRoleResponse {}
+
+message RemoveUserRoleRequest {
+  string auth_token = 1;
+  string api_key = 2;
+  string role = 3;
+  string group_id = 4;
+}
+
+message RemoveUserRoleResponse {}
+
+// 更新用户名
+message UpdateNameRequest {
+  string auth_token = 1;
+  string full_name = 2;
+}
+
+message UpdateNameResponse {}
+
+// 头像管理
+message GetProfilePicturePresignedUploadUrlRequest {
+  string auth_token = 1;
+}
+
+message GetProfilePicturePresignedUploadUrlResponse {
+  string url = 1;
+}
+
+message ProfilePictureUploadCompleteRequest {
+  string auth_token = 1;
+}
+
+message ProfilePictureUploadCompleteResponse {}
+
+message GetProfileDataRequest {
+  string api_key = 1;
+}
+
+message GetProfileDataResponse {
+  string profile_picture_url = 1;
+}
+
+message DeleteProfilePictureRequest {
+  string auth_token = 1;
+}
+
+message DeleteProfilePictureResponse {}
+
+// 更新来源
+message UpdateInboundSourceRequest {
+  string auth_token = 1;
+  string inbound_source = 2;
+}
+
+message UpdateInboundSourceResponse {}
+
+// 删除用户
+message DeleteUserRequest {
+  string auth_token = 1;
+  string api_key = 3;
+}
+
+message DeleteUserResponse {}
+
+// License
+message GetLicenseRequest {}
+
+message GetLicenseResponse {
+  License license = 1;
+}
+
+// 团队访问
+message RequestTeamAccessRequest {
+  string api_key = 1;
+  string invite_id = 2;
+}
+
+message RequestTeamAccessResponse {}
+
+// 更新用户团队状态
+message UpdateUserTeamStatusRequest {
+  string auth_token = 1;
+  repeated UserTeamStatusUpdateItem updates = 2;
+  
+  message UserTeamStatusUpdateItem {
+    string api_key = 1;
+    UserTeamStatus status = 2;
+  }
+}
+
+message UpdateUserTeamStatusResponse {
+  repeated User users = 1;
+}
+
+// 团队元数据
+message GetTeamMetadataRequest {
+  string invite_id = 1;
+}
+
+message GetTeamMetadataResponse {
+  Team team = 1;
+}
+
+// 从团队移除用户
+message RemoveUserFromTeamRequest {
+  string auth_token = 1;
+  string api_key = 2;
+}
+
+message RemoveUserFromTeamResponse {}
+
+// 刷新团队邀请 ID
+message RefreshTeamInviteIdRequest {
+  string auth_token = 1;
+}
+
+message RefreshTeamInviteIdResponse {
+  Team team = 1;
+}
+
+// 预批准
+message GrantPreapprovalRequest {
+  string auth_token = 1;
+  repeated PreapprovalUserItem preapprovals = 2;
+  
+  message PreapprovalUserItem {
+    string name = 1;
+    string email = 2;
+  }
+}
+
+// ==================== Common Messages ====================
+
+message Team {
+  // 团队信息字段
+}
+
+message User {
+  // 用户信息字段
+}
+
+message TeamOption {
+  // 团队选项
+}
+
+message License {
+  // License 信息
+}
+
+message PreapprovedUser {
+  string name = 1;
+  string email = 2;
+}

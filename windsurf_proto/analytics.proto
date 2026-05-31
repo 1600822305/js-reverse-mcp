@@ -1,0 +1,212 @@
+syntax = "proto3";
+
+package exa.analytics_pb;
+
+import "google/protobuf/timestamp.proto";
+import "codeium_common.proto";
+
+// ==================== Messages ====================
+
+message RecordCommandUsageRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string command = 2;
+  string selection = 3;
+  RequestSource request_source = 4;
+  string prompt_id = 5;
+  string completion_id = 6;
+  string completion = 7;
+  string prompt = 8;
+  codeium_common_pb.Model requested_model_id = 9;
+  StopReason stop_reason = 10;
+  codeium_common_pb.Language language = 11;
+  codeium_common_pb.ProviderSource provider_source = 12;
+  CommandPromptComponents command_prompt_components = 13;
+  CortexTrajectoryReference cortex_trajectory_reference = 14;
+  SuperCompleteFilterReason super_complete_filter_reason = 15;
+  repeated PromptStageLatency prompt_stage_latencies = 16;
+  SupercompleteTriggerCondition supercomplete_trigger_condition = 17;
+  CompletionProfile completion_profile = 18;
+  int32 char_insertions = 19;
+  int32 char_deletions = 20;
+  repeated string trajectory_step_oids = 21;
+}
+
+message RecordCommandUsageResponse {}
+
+message RecordPromptRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  CompletionsRequest request = 2;
+  string prompt_id = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  string ip = 5;
+  string inference_address = 6;
+  codeium_common_pb.ProviderSource provider_source = 7;
+  string api_server_address = 8;
+  codeium_common_pb.Model firstline_model = 9;
+  PromptComponents prompt_components = 10;
+  bool is_server_side_prompt = 11;
+  CommandPromptComponents unified_prompt_components = 12;
+  CortexTrajectoryReference cortex_trajectory_reference = 13;
+}
+
+message BatchRecordPromptsRequest {
+  repeated RecordPromptRequest prompts = 1;
+}
+
+message BatchRecordPromptsResponse {}
+
+message RecordCompletionsRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  repeated CompletionWithLatencyInfo completions_with_latency_info = 2;
+  string prompt_id = 3;
+  uint64 prompt_length = 4;
+  codeium_common_pb.ProviderSource provider_source = 5;
+  string relative_path = 6;
+  Repository repository = 7;
+  string model_tag = 8;
+  google.protobuf.Timestamp timestamp = 9;
+}
+
+message RecordCompletionsResponse {}
+
+message BatchRecordCompletionsRequest {
+  repeated RecordCompletionsRequest completions = 1;
+}
+
+message BatchRecordCompletionsResponse {}
+
+message RecordContextToPromptRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  PromptUser prompt_user = 2;
+  string chat_message_id = 3;
+  repeated CodeContextItemMetadata retrieved_code_context_item_metadata = 4;
+  uint64 latency_ms = 5;
+  google.protobuf.Timestamp timestamp = 6;
+  CortexState cortex_state = 7;
+  string prompt_id = 8;
+}
+
+message RecordContextToPromptResponse {}
+
+message RecordCortexTrajectoryRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string trajectory_id = 2;
+  string cascade_id = 5;
+  optional string arena_id = 8;
+  TrajectoryType trajectory_type = 3;
+  TrajectorySource trajectory_source = 7;
+  repeated CortexTrajectoryReference parents = 4;
+  TrajectoryMetadata trajectory_metadata = 6;
+}
+
+message RecordCortexTrajectoryResponse {}
+
+message RecordCortexTrajectoryStepRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string trajectory_id = 2;
+  string step_id = 3;
+  TrajectoryStepType step_type = 4;
+  string content = 5;
+  google.protobuf.Timestamp timestamp = 6;
+  TrajectoryStepMetadata step_metadata = 7;
+}
+
+message RecordCortexTrajectoryStepResponse {}
+
+message RecordArenaModeTrajectoryDetailsRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string arena_id = 2;
+  string chosen_trajectory_id = 3;
+  string rejected_trajectory_id = 4;
+  ArenaPreference preference = 5;
+}
+
+message RecordArenaModeTrajectoryDetailsResponse {}
+
+// ==================== Analytics Service ====================
+
+service AnalyticsService {
+  rpc RecordCommandUsage(RecordCommandUsageRequest) returns (RecordCommandUsageResponse);
+  rpc BatchRecordPrompts(BatchRecordPromptsRequest) returns (BatchRecordPromptsResponse);
+  rpc BatchRecordCompletions(BatchRecordCompletionsRequest) returns (BatchRecordCompletionsResponse);
+  rpc RecordContextToPrompt(RecordContextToPromptRequest) returns (RecordContextToPromptResponse);
+  rpc RecordCortexTrajectory(RecordCortexTrajectoryRequest) returns (RecordCortexTrajectoryResponse);
+  rpc RecordCortexTrajectoryStep(RecordCortexTrajectoryStepRequest) returns (RecordCortexTrajectoryStepResponse);
+  rpc RecordArenaModeTrajectoryDetails(RecordArenaModeTrajectoryDetailsRequest) returns (RecordArenaModeTrajectoryDetailsResponse);
+  rpc RecordChat(RecordChatRequest) returns (RecordChatResponse);
+  rpc RecordChatFeedback(RecordChatFeedbackRequest) returns (RecordChatFeedbackResponse);
+  rpc RecordEvent(RecordEventRequest) returns (RecordEventResponse);
+  rpc RecordSearch(RecordSearchRequest) returns (RecordSearchResponse);
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  rpc GetCascadeModelConfigs(GetCascadeModelConfigsRequest) returns (GetCascadeModelConfigsResponse);
+}
+
+// ==================== Supporting Messages ====================
+
+message CompletionsRequest {}
+message CompletionWithLatencyInfo {}
+message PromptComponents {}
+message CommandPromptComponents {}
+message CortexTrajectoryReference {}
+message SuperCompleteFilterReason {}
+message PromptStageLatency {}
+message CompletionProfile {}
+message Repository {}
+message CodeContextItemMetadata {}
+message CortexState {}
+message TrajectoryMetadata {}
+message TrajectoryStepMetadata {}
+
+// ==================== Enums ====================
+
+enum RequestSource {
+  REQUEST_SOURCE_UNSPECIFIED = 0;
+}
+
+enum StopReason {
+  STOP_REASON_UNSPECIFIED = 0;
+}
+
+enum SupercompleteTriggerCondition {
+  SUPERCOMPLETE_TRIGGER_CONDITION_UNSPECIFIED = 0;
+}
+
+enum PromptUser {
+  PROMPT_USER_UNSPECIFIED = 0;
+}
+
+enum TrajectoryType {
+  TRAJECTORY_TYPE_UNSPECIFIED = 0;
+}
+
+enum TrajectorySource {
+  TRAJECTORY_SOURCE_UNSPECIFIED = 0;
+}
+
+enum TrajectoryStepType {
+  TRAJECTORY_STEP_TYPE_UNSPECIFIED = 0;
+}
+
+enum ArenaPreference {
+  ARENA_PREFERENCE_UNSPECIFIED = 0;
+}
+
+// Placeholder messages for service methods
+message RecordChatRequest {}
+message RecordChatResponse {}
+message RecordChatFeedbackRequest {}
+message RecordChatFeedbackResponse {}
+message RecordEventRequest {}
+message RecordEventResponse {}
+message RecordSearchRequest {}
+message RecordSearchResponse {}
+message PingRequest {}
+message PingResponse {}
+message GetStatusRequest {}
+message GetStatusResponse {}
+message GetConfigRequest {}
+message GetConfigResponse {}
+message GetCascadeModelConfigsRequest {}
+message GetCascadeModelConfigsResponse {}

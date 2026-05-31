@@ -1,0 +1,323 @@
+syntax = "proto3";
+
+package exa.api_server_pb;
+
+import "google/protobuf/timestamp.proto";
+import "codeium_common.proto";
+
+// ==================== Chat Messages ====================
+
+message GetChatMessageRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string prompt = 2;
+  repeated ChatMessagePrompt chat_message_prompts = 3;
+  bool use_internal_chat_model = 5;
+  codeium_common_pb.Model internal_chat_model = 6;
+  ChatRequestType request_type = 7;
+  CompletionConfiguration configuration = 8;
+  ExperimentConfig experiment_config = 9;
+  repeated Tool tools = 10;
+  bool disable_parallel_tool_calls = 11;
+  ToolChoice tool_choice = 12;
+  SystemPromptCacheOptions system_prompt_cache_options = 13;
+  string chat_model_name = 14;
+  CortexTrajectoryReference trajectory_reference = 15;
+  string cascade_id = 16;
+  string prompt_id = 17;
+  codeium_common_pb.ProviderSource provider_source = 18;
+  codeium_common_pb.Language language = 19;
+  PlannerMode planner_mode = 20;
+}
+
+message GetChatMessageResponse {
+  string message_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string delta_text = 3;
+  uint32 delta_tokens = 4;
+  StopReason stop_reason = 5;
+  repeated ToolCall delta_tool_calls = 6;
+  Usage usage = 7;
+  int32 credit_cost = 14;
+  bool redact = 8;
+  string delta_thinking = 9;
+  string delta_signature = 10;
+  bool thinking_redacted = 11;
+  double latency = 12;
+  CompletionProfile completion_profile = 13;
+  string output_id = 15;
+  string thinking_id = 16;
+  string request_id = 17;
+  int32 committed_credit_cost = 18;
+  string prompt = 19;
+  bytes gemini_thought_signature = 20;
+  string delta_signature_type = 21;
+}
+
+// ==================== Rate Limiting ====================
+
+message CheckUserMessageRateLimitRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  codeium_common_pb.Model model = 2;
+}
+
+message CheckUserMessageRateLimitResponse {
+  bool has_capacity = 1;
+  string message = 2;
+  int32 messages_remaining = 3;
+  int32 max_messages = 4;
+  int64 resets_in_seconds = 5;
+}
+
+message CheckChatCapacityRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  codeium_common_pb.Model model = 2;
+}
+
+message CheckChatCapacityResponse {
+  bool has_capacity = 1;
+  string message = 2;
+  int32 active_sessions = 3;
+}
+
+// ==================== DeepWiki ====================
+
+message GetDeepWikiRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  DeepWikiRequestType request_type = 2;
+  string symbol_name = 3;
+  string symbol_uri = 4;
+  string context = 5;
+  SymbolType symbol_type = 6;
+  string language = 7;
+  bool generate_followups = 8;
+}
+
+message GetDeepWikiResponse {
+  GetChatMessageResponse response = 1;
+  ModelType model_type = 2;
+  bool is_followup = 3;
+}
+
+// ==================== Streaming Completions ====================
+
+message GetStreamingModelAPITextCompletionRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  codeium_common_pb.Model model = 2;
+  string system_prompt = 3;
+  repeated ChatMessagePrompt chat_message_prompts = 4;
+  CompletionConfiguration completion_configuration = 5;
+  ChatRequestType request_type = 6;
+  SystemPromptCacheOptions system_prompt_cache_options = 7;
+  OverrideModelInfo override_model_info = 8;
+}
+
+message GetStreamingModelAPITextCompletionResponse {
+  DeltaMap delta_map = 1;
+}
+
+// ==================== Devstral ====================
+
+message GetDevstralStreamRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string messages_json = 2;
+  string tools_json = 3;
+}
+
+message GetDevstralStreamResponse {
+  string output = 2;
+  repeated ToolCall tool_calls = 3;
+}
+
+// ==================== Cortex Recording ====================
+
+message RecordCortexStepRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string cortex_plan_id = 2;
+  CortexStep step_proto = 3;
+  string execution_id = 4;
+  CortexState state_snapshot = 5;
+  string event_source = 6;
+}
+
+message RecordCortexStepResponse {}
+
+message RecordCortexGeneratorMetadataRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string trajectory_id = 2;
+  string cascade_id = 3;
+  GeneratorMetadata generator_metadata = 4;
+  uint32 metadata_index = 5;
+  int32 last_common_index = 6;
+}
+
+message RecordCortexGeneratorMetadataResponse {}
+
+message RecordCortexExecutionMetadataRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string execution_id = 2;
+  string cascade_id = 3;
+  string trajectory_id = 4;
+  string experiment_json = 5;
+  string experiment_variants_json = 6;
+  CascadeConfig cascade_config = 7;
+}
+
+message RecordCortexExecutionMetadataResponse {}
+
+// ==================== Chat Model Node ====================
+
+message RecordChatModelNodeRunRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string run_id = 2;
+  string mixin_type = 3;
+  uint64 latency_ms = 4;
+  string system_prompt = 5;
+  repeated ChatMessagePrompt chat_message_prompts = 6;
+  ContextInclusionType context_inclusion_type = 7;
+  codeium_common_pb.Model model_id = 8;
+  google.protobuf.Timestamp timestamp = 9;
+  string error = 10;
+  int32 num_iterations = 11;
+  int32 completion_tokens = 12;
+  int32 prompt_tokens = 13;
+}
+
+message RecordChatModelNodeRunResponse {}
+
+// ==================== Commit Message ====================
+
+message RecordCommitMessageGenerationRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  uint64 generation_duration_ms = 2;
+  string system_prompt = 3;
+  string full_prompt = 4;
+  int32 prompt_tokens = 5;
+  int32 completion_tokens = 6;
+  string repo_root = 7;
+  string branch_name = 8;
+  string latest_commit_hash = 9;
+  uint32 num_files_changed = 10;
+  uint32 num_lines_added = 11;
+  uint32 num_lines_deleted = 12;
+  string commit_message_summary = 13;
+  string commit_message_description = 14;
+}
+
+message RecordCommitMessageGenerationResponse {}
+
+// ==================== Trajectory Recording ====================
+
+message RecordTrajectorySegmentAnalyticsRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  TrajectorySegment trajectory_segment = 2;
+  uint32 start_step_index = 3;
+  uint32 start_generator_metadata_index = 4;
+}
+
+message RecordTrajectorySegmentAnalyticsResponse {}
+
+message RecordTrajectorySegmentEventsRequest {
+  codeium_common_pb.Metadata metadata = 1;
+  string trajectory_id = 2;
+  string execution_id = 3;
+  repeated TrajectoryEventRecord records = 4;
+  string event_type = 5;
+  TrajectorySource trajectory_source = 6;
+  TrajectoryType trajectory_type = 7;
+  ModelInfo model = 8;
+}
+
+message RecordTrajectorySegmentEventsResponse {}
+
+// ==================== Supporting Messages ====================
+
+message ChatMessagePrompt {
+  string role = 1;
+  string content = 2;
+}
+
+message Tool {
+  string name = 1;
+  string description = 2;
+  // parameters...
+}
+
+message ToolCall {
+  string id = 1;
+  string name = 2;
+  string arguments = 3;
+}
+
+message ToolChoice {}
+
+message SystemPromptCacheOptions {}
+
+message CompletionConfiguration {}
+
+message ExperimentConfig {}
+
+message CortexTrajectoryReference {}
+
+message Usage {}
+
+message CompletionProfile {}
+
+message OverrideModelInfo {}
+
+message DeltaMap {}
+
+message CortexStep {}
+
+message CortexState {}
+
+message GeneratorMetadata {}
+
+message CascadeConfig {}
+
+message TrajectorySegment {}
+
+message TrajectoryEventRecord {}
+
+message ModelInfo {}
+
+// ==================== Enums ====================
+
+enum ChatRequestType {
+  CHAT_REQUEST_TYPE_UNSPECIFIED = 0;
+}
+
+enum StopReason {
+  STOP_REASON_UNSPECIFIED = 0;
+  STOP_REASON_MAX_TOKENS = 1;
+  STOP_REASON_STOP_SEQUENCE = 2;
+  STOP_REASON_END_TURN = 3;
+  STOP_REASON_TOOL_USE = 4;
+}
+
+enum DeepWikiRequestType {
+  DEEP_WIKI_REQUEST_TYPE_UNSPECIFIED = 0;
+}
+
+enum SymbolType {
+  SYMBOL_TYPE_UNSPECIFIED = 0;
+}
+
+enum ModelType {
+  MODEL_TYPE_UNSPECIFIED = 0;
+}
+
+enum PlannerMode {
+  PLANNER_MODE_UNSPECIFIED = 0;
+}
+
+enum ContextInclusionType {
+  CONTEXT_INCLUSION_TYPE_UNSPECIFIED = 0;
+}
+
+enum TrajectorySource {
+  TRAJECTORY_SOURCE_UNSPECIFIED = 0;
+}
+
+enum TrajectoryType {
+  TRAJECTORY_TYPE_UNSPECIFIED = 0;
+}
