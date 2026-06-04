@@ -23,7 +23,7 @@
   - [`list_console_messages`](#list_console_messages)
   - [`take_screenshot`](#take_screenshot)
   - [`take_snapshot`](#take_snapshot)
-- **[JS Reverse Engineering](#js-reverse-engineering)** (57 tools)
+- **[JS Reverse Engineering](#js-reverse-engineering)** (55 tools)
   - [`analyze_encoded_string`](#analyze_encoded_string)
   - [`beautify_script`](#beautify_script)
   - [`break_on_attribute_modified`](#break_on_attribute_modified)
@@ -31,7 +31,7 @@
   - [`break_on_subtree_modified`](#break_on_subtree_modified)
   - [`break_on_xhr`](#break_on_xhr)
   - [`decode_protobuf`](#decode_protobuf)
-  - [`decrypt_strings`](#decrypt_strings)
+  - [`deobfuscate`](#deobfuscate)
   - [`detect_encryption`](#detect_encryption)
   - [`diff_globals`](#diff_globals)
   - [`encode_protobuf`](#encode_protobuf)
@@ -60,8 +60,6 @@
   - [`remove_breakpoint`](#remove_breakpoint)
   - [`remove_dom_breakpoint`](#remove_dom_breakpoint)
   - [`remove_xhr_breakpoint`](#remove_xhr_breakpoint)
-  - [`restore_control_flow`](#restore_control_flow)
-  - [`restore_variable_names`](#restore_variable_names)
   - [`resume`](#resume)
   - [`search_in_sources`](#search_in_sources)
   - [`set_breakpoint`](#set_breakpoint)
@@ -402,16 +400,21 @@ in the DevTools Elements panel (if any).
 
 ---
 
-### `decrypt_strings`
+### `deobfuscate`
 
-**Description:** Attempts to decrypt and decode obfuscated strings in JavaScript code. Detects common string obfuscation patterns including base64, hex encoding, and custom encryption.
+**Description:** AST-based JavaScript deobfuscation (powered by Babel). Parses the code into an AST and applies scope-safe transforms: variable renaming, constant folding, dead/unreachable code elimination, and string/number normalization. Far more reliable than regex-based approaches because it understands scopes and never rewrites string contents or unrelated identifiers. Provide a scriptId (from [`list_scripts`](#list_scripts)) or a raw code snippet. Use [`beautify_script`](#beautify_script) if you only want pretty-printing.
 
 **Parameters:**
 
-- **autoDetect** (boolean) _(optional)_: Automatically detect and decrypt common encoding schemes (default: true).
-- **code** (string) _(optional)_: JavaScript code to analyze.
-- **customDecryptFunction** (string) _(optional)_: Name of a custom decryption function found in the code (e.g., "\_0x1234"). The tool will try to use it.
-- **scriptId** (string) _(optional)_: The script ID to analyze (from [`list_scripts`](#list_scripts)).
+- **aggressive** (boolean) _(optional)_: Also rename \_0x-prefixed non-hex names and short 1-2 char identifiers. May reduce readability of intentional short names (default: false).
+- **code** (string) _(optional)_: JavaScript code to [`deobfuscate`](#deobfuscate). Use this for a snippet instead of a full script.
+- **foldConstants** (boolean) _(optional)_: Evaluate constant expressions like 2*60*60 or "a"+"b" to their literal value (default: true).
+- **maxOutputLength** (number) _(optional)_: Maximum number of characters of deobfuscated code to return. Set to 0 for unlimited (default: 20000).
+- **preserveShortNames** (boolean) _(optional)_: When aggressive renaming is on, keep common loop counters i/j/k unchanged (default: true).
+- **removeDeadCode** (boolean) _(optional)_: Remove dead branches (if(false){}) and unreachable code after return/throw/break/continue (default: true).
+- **renameVariables** (boolean) _(optional)_: Rename obfuscated identifiers (e.g. \_0x3f2a) to readable names using scope-safe renaming (default: true).
+- **scriptId** (string) _(optional)_: The script ID to [`deobfuscate`](#deobfuscate) (from [`list_scripts`](#list_scripts)).
+- **simplifyStrings** (boolean) _(optional)_: Normalize literals: decode \xNN/\uNNNN escapes, convert hex/octal/binary numbers to decimal, and rewrite obj["prop"] to obj.prop (default: true).
 
 ---
 
@@ -722,31 +725,6 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **url** (string) **(required)**: The URL pattern to remove breakpoint for.
-
----
-
-### `restore_control_flow`
-
-**Description:** Analyzes and restores obfuscated control flow structures. Detects control flow flattening, switch-case obfuscation, and other control flow obfuscation techniques.
-
-**Parameters:**
-
-- **code** (string) _(optional)_: JavaScript code to analyze.
-- **scriptId** (string) _(optional)_: The script ID to analyze (from [`list_scripts`](#list_scripts)).
-- **simplify** (boolean) _(optional)_: Attempt to simplify the control flow (default: true). May take longer but produces cleaner results.
-
----
-
-### `restore_variable_names`
-
-**Description:** Analyzes obfuscated JavaScript code and attempts to restore meaningful variable names based on usage patterns, context, and common naming conventions.
-
-**Parameters:**
-
-- **aggressive** (boolean) _(optional)_: Use aggressive renaming (default: false). May produce false positives but catches more variables.
-- **code** (string) _(optional)_: JavaScript code to analyze. Use this for code snippets.
-- **preserveShortNames** (boolean) _(optional)_: Preserve short variable names like i, j, k for loops (default: true).
-- **scriptId** (string) _(optional)_: The script ID to analyze (from [`list_scripts`](#list_scripts)).
 
 ---
 
