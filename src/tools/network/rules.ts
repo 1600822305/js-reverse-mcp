@@ -235,6 +235,7 @@ export const listNetworkRules = defineTool({
     title: 'List Network Rules',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
+    skipDevToolsDetection: true,
   },
   schema: {},
   handler: async (request, response, context) => {

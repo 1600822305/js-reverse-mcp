@@ -63,6 +63,7 @@ export const listWebsocketConnections = defineTool({
     title: 'List WebSocket Connections',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
+    skipDevToolsDetection: true,
   },
   schema: {},
   handler: async (request, response, context) => {
@@ -96,6 +97,7 @@ export const listWebsocketMessages = defineTool({
     title: 'List WebSocket Messages',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
+    skipDevToolsDetection: true,
   },
   schema: {
     connectionId: zod

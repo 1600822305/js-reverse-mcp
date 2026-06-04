@@ -46,6 +46,7 @@ export const decodeResponse = defineTool({
     title: 'Decode Response',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
+    skipDevToolsDetection: true,
   },
   schema: {
     requestId: zod

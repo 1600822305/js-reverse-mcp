@@ -53,6 +53,7 @@ export const searchNetwork = defineTool({
     title: 'Search Network',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
+    skipDevToolsDetection: true,
   },
   schema: {
     urlPattern: zod
@@ -188,6 +189,7 @@ export const getResponseBody = defineTool({
     title: 'Get Response Body',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
+    skipDevToolsDetection: true,
   },
   schema: {
     requestId: zod
@@ -240,6 +242,7 @@ export const exportHar = defineTool({
     title: 'Export HAR',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
+    skipDevToolsDetection: true,
   },
   schema: {
     urlPattern: zod
