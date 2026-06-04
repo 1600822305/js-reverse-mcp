@@ -93,7 +93,9 @@ export const replayRequest = defineTool({
     };
     const body =
       params.overrideBody ??
-      (method === 'GET' || method === 'HEAD' ? undefined : record.requestBody);
+      (method === 'GET' || method === 'HEAD'
+        ? undefined
+        : await context.networkManager.store.getRequestBody(params.requestId));
 
     const replayCode = `
 (async () => {

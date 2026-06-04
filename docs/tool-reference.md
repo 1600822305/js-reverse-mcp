@@ -164,7 +164,7 @@
 - **method** (enum: "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS") _(optional)_: HTTP method (default: POST).
 - **tokenHeader** (string) _(optional)_: Header name for the auth token (default: "x-auth-token"). Use "Authorization" for Bearer tokens.
 - **tokenName** (string) _(optional)_: Name of a saved token to use. If omitted, uses the active token.
-- **url** (string) **(required)**: The URL to request. Can be relative (e.g. "/_backend/...") or absolute.
+- **url** (string) **(required)**: The URL to request. Can be relative (e.g. "/\_backend/...") or absolute.
 
 ---
 
@@ -244,7 +244,7 @@
 - **name** (string) **(required)**: A short name for this token (e.g. "free_account", "trial_user", "pro_user").
 - **setActive** (boolean) _(optional)_: Whether to set this token as the active token (default: false).
 - **token** (string) **(required)**: The token value to save.
-- **type** (enum: "firebase", "jwt", "api_key", "bearer", "custom") _(optional)_: Type of token (default: "bearer").
+- **type** (enum: "firebase", "jwt", "api*key", "bearer", "custom") *(optional)\_: Type of token (default: "bearer").
 
 ---
 
@@ -269,15 +269,14 @@ so returned values have to JSON-serializable.
 
 - **args** (array) _(optional)_: An optional list of arguments to pass to the function.
 - **function** (string) **(required)**: A JavaScript function declaration to be executed by the tool in the currently selected page.
-Example without arguments: `() => {
+  Example without arguments: `() => {
   return document.title
 }` or `async () => {
   return await fetch("example.com")
 }`.
-Example with arguments: `(el) => {
+  Example with arguments: `(el) => {
   return el.innerText;
 }`
-
 
 ---
 
@@ -345,8 +344,11 @@ in the DevTools Elements panel (if any).
 - **isRegex** (boolean) _(optional)_: Treat urlPattern as a JavaScript regular expression.
 - **methods** (array) _(optional)_: HTTP methods to match (e.g. ["GET","POST"]). Empty = any.
 - **removeHeaders** (array) _(optional)_: Header names to remove (modifyRequest/modifyResponse).
+- **requestBodyContains** (string) _(optional)_: Extra match: the request body must contain this substring (case-insensitive).
+- **requestHeaderContains** (object) _(optional)_: Extra match: each named request header must contain the substring (case-insensitive), e.g. {"authorization":"Bearer"}.
 - **resourceTypes** (array) _(optional)_: CDP resource types to match (e.g. ["XHR","Fetch"]). Empty = any.
 - **responseBody** (string) _(optional)_: Response body (mock, or modifyResponse to fully replace the body).
+- **responseHeaderContains** (object) _(optional)_: Extra match: each named response header must contain the substring (Response stage only).
 - **responseHeaders** (object) _(optional)_: Response headers (mock/modifyResponse).
 - **responseStatus** (integer) _(optional)_: Response status code (mock/modifyResponse).
 - **ruleId** (string) _(optional)_: Custom rule id. Auto-generated when omitted.
@@ -355,7 +357,7 @@ in the DevTools Elements panel (if any).
 - **setRequestBody** (string) _(optional)_: Replacement request body (modifyRequest).
 - **setUrl** (string) _(optional)_: Redirect the request to this URL (modifyRequest).
 - **stage** (enum: "Request", "Response") _(optional)_: Interception stage. Defaults to Response for modifyResponse, otherwise Request.
-- **urlPattern** (string) **(required)**: URL matcher. Glob with * by default; substring match when no * is present; JS regex when isRegex=true.
+- **urlPattern** (string) **(required)**: URL matcher. Glob with _ by default; substring match when no _ is present; JS regex when isRegex=true.
 
 ---
 
@@ -484,13 +486,13 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
-- **aggressive** (boolean) _(optional)_: Also rename _0x-prefixed non-hex names and short 1-2 char identifiers. May reduce readability of intentional short names (default: false).
+- **aggressive** (boolean) _(optional)_: Also rename \_0x-prefixed non-hex names and short 1-2 char identifiers. May reduce readability of intentional short names (default: false).
 - **code** (string) _(optional)_: JavaScript code to [`deobfuscate`](#deobfuscate). Use this for a snippet instead of a full script.
 - **foldConstants** (boolean) _(optional)_: Evaluate constant expressions like 2*60*60 or "a"+"b" to their literal value (default: true).
 - **maxOutputLength** (number) _(optional)_: Maximum number of characters of deobfuscated code to return. Set to 0 for unlimited (default: 20000).
 - **preserveShortNames** (boolean) _(optional)_: When aggressive renaming is on, keep common loop counters i/j/k unchanged (default: true).
 - **removeDeadCode** (boolean) _(optional)_: Remove dead branches (if(false){}) and unreachable code after return/throw/break/continue (default: true).
-- **renameVariables** (boolean) _(optional)_: Rename obfuscated identifiers (e.g. _0x3f2a) to readable names using scope-safe renaming (default: true).
+- **renameVariables** (boolean) _(optional)_: Rename obfuscated identifiers (e.g. \_0x3f2a) to readable names using scope-safe renaming (default: true).
 - **scriptId** (string) _(optional)_: The script ID to [`deobfuscate`](#deobfuscate) (from [`list_scripts`](#list_scripts)).
 - **simplifyStrings** (boolean) _(optional)_: Normalize literals: decode \xNN/\uNNNN escapes, convert hex/octal/binary numbers to decimal, and rewrite obj["prop"] to obj.prop (default: true).
 
@@ -920,13 +922,15 @@ in the DevTools Elements panel (if any).
 
 - **bodyContains** (string) _(optional)_: Only return requests whose request or response body contains this text. Fetches response bodies for candidates.
 - **includeBodies** (boolean) _(optional)_: Include a truncated response body for each result.
+- **includeInitiator** (boolean) _(optional)_: Include the JS initiator call stack for each result (main-page requests only). Useful to locate the code that fired a request.
 - **isRegex** (boolean) _(optional)_
 - **limit** (integer) _(optional)_: Maximum number of results (default 50).
 - **maxBodyLength** (integer) _(optional)_: Maximum body characters to display (default 2000).
+- **maxFrames** (integer) _(optional)_: Maximum initiator call-stack frames to show (default 5).
 - **method** (string) _(optional)_: HTTP method filter.
 - **resourceType** (string) _(optional)_: CDP resource type filter (e.g. XHR, Fetch, Script).
 - **status** (integer) _(optional)_: HTTP status filter.
-- **urlPattern** (string) _(optional)_: URL matcher: glob with *, substring, or regex (isRegex).
+- **urlPattern** (string) _(optional)_: URL matcher: glob with \*, substring, or regex (isRegex).
 
 ---
 
@@ -1159,7 +1163,7 @@ in the DevTools Elements panel (if any).
 - **newOnly** (boolean) _(optional)_: When true, ignore already-captured matches and wait for a fresh one. Set this before triggering the action if a stale match could exist.
 - **resourceType** (string) _(optional)_: CDP resource type filter (e.g. XHR, Fetch, Script).
 - **timeout** (integer) _(optional)_: Maximum wait time in milliseconds (default 30000).
-- **urlPattern** (string) _(optional)_: URL matcher: glob with *, substring, or regex (isRegex).
+- **urlPattern** (string) _(optional)_: URL matcher: glob with \*, substring, or regex (isRegex).
 
 ---
 
@@ -1176,7 +1180,7 @@ in the DevTools Elements panel (if any).
 - **newOnly** (boolean) _(optional)_: When true, ignore already-captured matches and wait for a fresh one. Set this before triggering the action if a stale match could exist.
 - **resourceType** (string) _(optional)_: CDP resource type filter (e.g. XHR, Fetch, Script).
 - **timeout** (integer) _(optional)_: Maximum wait time in milliseconds (default 30000).
-- **urlPattern** (string) _(optional)_: URL matcher: glob with *, substring, or regex (isRegex).
+- **urlPattern** (string) _(optional)_: URL matcher: glob with \*, substring, or regex (isRegex).
 
 ---
 
@@ -1227,7 +1231,7 @@ in the DevTools Elements panel (if any).
 
 - **formIndex** (integer) _(optional)_: Index of a single form to inspect when multiple forms match. When omitted, all matching forms are returned.
 - **formSelector** (string) _(optional)_: CSS selector for the form(s) (default: "form").
-- **maskPasswords** (boolean) _(optional)_: Mask password field values as "********" instead of returning the plaintext value (default: true).
+- **maskPasswords** (boolean) _(optional)_: Mask password field values as "**\*\*\*\***" instead of returning the plaintext value (default: true).
 
 ---
 

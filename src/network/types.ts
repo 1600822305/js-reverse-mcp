@@ -27,6 +27,12 @@ export interface CapturedRequest {
   redirects?: Array<{url: string; status: number; statusText?: string}>;
   requestHeaders: Record<string, string>;
   requestBody?: string;
+  /**
+   * Whether CDP reported a request body exists. When true but `requestBody` is
+   * unset, the body was too large to inline and can be fetched lazily via
+   * `Network.getRequestPostData`.
+   */
+  hasPostData?: boolean;
   status?: number;
   statusText?: string;
   responseHeaders?: Record<string, string>;
@@ -75,6 +81,18 @@ export interface NetworkRule {
   methods?: string[];
   /** CDP resource types to match. Empty/undefined means any. */
   resourceTypes?: string[];
+  /**
+   * Extra match conditions beyond the URL. A rule only fires when *all* of the
+   * conditions below (that are set) hold, in addition to the URL/method/type
+   * filters. Header names are matched case-insensitively; values and the body
+   * use case-insensitive substring matching.
+   */
+  /** Each named request header must contain the given substring. */
+  requestHeaderContains?: Record<string, string>;
+  /** The request body must contain this substring. */
+  requestBodyContains?: string;
+  /** Each named response header must contain the substring (Response stage). */
+  responseHeaderContains?: Record<string, string>;
   stage: RuleStage;
   action: RuleAction;
   // ----- request modifications (modifyRequest) -----
