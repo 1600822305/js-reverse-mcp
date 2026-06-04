@@ -23,7 +23,7 @@
   - [`list_console_messages`](#list_console_messages)
   - [`take_screenshot`](#take_screenshot)
   - [`take_snapshot`](#take_snapshot)
-- **[JS Reverse Engineering](#js-reverse-engineering)** (74 tools)
+- **[JS Reverse Engineering](#js-reverse-engineering)** (75 tools)
   - [`add_network_rule`](#add_network_rule)
   - [`analyze_encoded_string`](#analyze_encoded_string)
   - [`beautify_script`](#beautify_script)
@@ -35,6 +35,7 @@
   - [`clear_cookies`](#clear_cookies)
   - [`clear_network_conditions`](#clear_network_conditions)
   - [`decode_protobuf`](#decode_protobuf)
+  - [`decode_response`](#decode_response)
   - [`delete_cookie`](#delete_cookie)
   - [`deobfuscate`](#deobfuscate)
   - [`detect_encryption`](#detect_encryption)
@@ -464,6 +465,18 @@ in the DevTools Elements panel (if any).
 - **method** (enum: "GET", "POST") _(optional)_: HTTP method when fetching url (default: POST).
 - **skipBytes** (integer) _(optional)_: Number of bytes to skip at the start of the fetched response (e.g. 5 for gRPC-Connect frame header).
 - **url** (string) _(optional)_: URL to fetch and decode the response as protobuf (gRPC-Connect/application/proto). Provide either data or url.
+
+---
+
+### `decode_response`
+
+**Description:** Decodes a captured response body (by numeric id from [`search_network`](#search_network)) as schema-less protobuf or gRPC-web/gRPC-Connect. Reads the already-captured body from the network store (no re-fetch, so one-time/signed responses still decode) and, for gRPC-web, splits the length-prefixed frames and shows the trailer metadata.
+
+**Parameters:**
+
+- **as** (enum: "auto", "protobuf", "grpc-web") _(optional)_: How to interpret the body. auto detects gRPC-web framing from the content-type/frame header, otherwise decodes as raw protobuf.
+- **maxDepth** (integer) _(optional)_: Maximum depth for nested message decoding (default 3).
+- **requestId** (integer) **(required)**: Numeric request id from [`search_network`](#search_network).
 
 ---
 
