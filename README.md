@@ -9,7 +9,7 @@
 - **JS 调试**: 断点、单步执行、调用栈、作用域变量检查
 - **脚本分析**: 搜索/获取所有加载的 JS 脚本源码，精确定位压缩文件中的位置
 - **函数 Hook**: Hook 任意函数（包括 webpack/rollup 模块内部函数），记录调用和返回值
-- **反混淆**: 变量名还原、控制流分析、字符串解密（Base64/Hex/Unicode）
+- **反混淆**: 基于 AST（Babel）的 `deobfuscate`——作用域安全的变量重命名、常量折叠、死代码/不可达代码消除、字符串/数字规范化
 - **加密检测**: 自动识别 CryptoJS、WebCrypto 等加密库，Hook 加密调用
 - **网络分析**: 请求拦截/修改/Mock、XHR 断点、WebSocket 监控、请求调用栈追踪
 - **网页抓取**: CSS 选择器提取、表格/链接/结构化数据/元数据提取
@@ -207,12 +207,10 @@ claude mcp add js-reverse node /你的路径/js-reverse-mcp/build/src/index.js
 
 ### 反混淆
 
-| 工具                     | 描述                                                      |
-| ------------------------ | --------------------------------------------------------- |
-| `beautify_script`        | 美化压缩/混淆的 JavaScript 代码                           |
-| `restore_variable_names` | 基于上下文分析还原混淆的变量名                            |
-| `restore_control_flow`   | 分析并还原控制流扁平化等混淆结构                          |
-| `decrypt_strings`        | 解密混淆字符串，支持 Base64、Hex、Unicode、自定义解密函数 |
+| 工具              | 描述                                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| `beautify_script` | 美化压缩/混淆的 JavaScript 代码                                                                       |
+| `deobfuscate`     | 基于 AST（Babel）的反混淆：作用域安全的变量重命名、常量折叠、死代码/不可达代码消除、字符串/数字规范化 |
 
 ### 代码覆盖率
 
@@ -321,10 +319,9 @@ hook_function "XMLHttpRequest.prototype.open" → 同时监控 XHR
 
 ```
 1. list_scripts → 找到混淆脚本的 scriptId
-2. beautify_script scriptId="..." → 格式化
-3. restore_variable_names scriptId="..." aggressive=true → 还原变量名
-4. decrypt_strings scriptId="..." autoDetect=true → 解密字符串
-5. restore_control_flow scriptId="..." → 还原控制流
+2. deobfuscate scriptId="..." → AST 反混淆（变量重命名 + 常量折叠 + 死代码消除 + 字符串/数字规范化）
+3. deobfuscate scriptId="..." aggressive=true → 更激进地重命名短名/_0x 前缀名
+4. （仅需美化时）beautify_script scriptId="..." → 纯格式化
 ```
 
 ---
