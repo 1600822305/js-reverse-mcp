@@ -33,6 +33,8 @@ export interface CapturedRequest {
   mimeType?: string;
   remoteIPAddress?: string;
   fromCache?: boolean;
+  /** CDP response timing breakdown, used to build real HAR timings. */
+  timing?: Protocol.Network.ResourceTiming;
   failed?: boolean;
   errorText?: string;
   /** Wall-clock timestamps in milliseconds. */

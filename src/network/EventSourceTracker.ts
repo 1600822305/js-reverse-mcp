@@ -12,35 +12,57 @@ import type {SseMessage} from './types.js';
 /**
  * Captures Server-Sent Events (EventSource) messages via the CDP
  * `Network.eventSourceMessageReceived` event. The store maps the CDP request
- * id back to the originating request URL using a supplied resolver.
+ * id back to the originating request URL using a supplied resolver, scoped by
+ * the session that captured it (request ids are only unique per session).
  */
 export class EventSourceTracker {
-  #client: CDPSession | null = null;
   #messages: SseMessage[] = [];
   #enabled = false;
+  #sessions = new Map<
+    CDPSession,
+    (e: Protocol.Network.EventSourceMessageReceivedEvent) => void
+  >();
   readonly #maxMessages: number;
-  readonly #resolveUrl: (cdpRequestId: string) => string | undefined;
+  readonly #resolveUrl: (
+    sessionKey: string,
+    cdpRequestId: string,
+  ) => string | undefined;
 
   constructor(
-    resolveUrl: (cdpRequestId: string) => string | undefined,
+    resolveUrl: (
+      sessionKey: string,
+      cdpRequestId: string,
+    ) => string | undefined,
     maxMessages = 5000,
   ) {
     this.#resolveUrl = resolveUrl;
     this.#maxMessages = maxMessages;
   }
 
-  bind(client: CDPSession): void {
-    this.#client = client;
-    client.on('Network.eventSourceMessageReceived', this.#onMessage);
-  }
-
-  unbind(): void {
-    const client = this.#client;
-    if (!client) {
+  bindSession(client: CDPSession, sessionKey: string): void {
+    if (this.#sessions.has(client)) {
       return;
     }
-    client.off('Network.eventSourceMessageReceived', this.#onMessage);
-    this.#client = null;
+    const handler = (
+      e: Protocol.Network.EventSourceMessageReceivedEvent,
+    ): void => this.#onMessage(sessionKey, e);
+    this.#sessions.set(client, handler);
+    client.on('Network.eventSourceMessageReceived', handler);
+  }
+
+  unbindSession(client: CDPSession): void {
+    const handler = this.#sessions.get(client);
+    if (!handler) {
+      return;
+    }
+    client.off('Network.eventSourceMessageReceived', handler);
+    this.#sessions.delete(client);
+  }
+
+  unbindAll(): void {
+    for (const client of [...this.#sessions.keys()]) {
+      this.unbindSession(client);
+    }
   }
 
   setEnabled(enabled: boolean): void {
@@ -56,6 +78,7 @@ export class EventSourceTracker {
   }
 
   #onMessage = (
+    sessionKey: string,
     event: Protocol.Network.EventSourceMessageReceivedEvent,
   ): void => {
     if (!this.#enabled) {
@@ -63,7 +86,7 @@ export class EventSourceTracker {
     }
     this.#messages.push({
       cdpRequestId: event.requestId,
-      url: this.#resolveUrl(event.requestId) ?? '',
+      url: this.#resolveUrl(sessionKey, event.requestId) ?? '',
       eventName: event.eventName,
       data: event.data,
       eventId: event.eventId,
