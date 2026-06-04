@@ -514,7 +514,7 @@ in the DevTools Elements panel (if any).
 
 ### `get_storage`
 
-**Description:** Gets browser storage data including cookies, localStorage, and sessionStorage.
+**Description:** Gets browser storage data including cookies, localStorage, and sessionStorage. Cookies are read via the Chrome DevTools Protocol (Network.getCookies), so httpOnly cookies (where auth/session tokens usually live) are included, along with rich attributes (domain, path, httpOnly, secure, sameSite, expires, etc.). localStorage and sessionStorage are read from the page context.
 
 **Parameters:**
 

@@ -14,6 +14,7 @@
  * - Request initiator (call stack) analysis
  */
 
+import type {CDPSession, Protocol} from '../third_party/index.js';
 import {zod} from '../third_party/index.js';
 
 import {ToolCategory} from './categories.js';
@@ -1811,7 +1812,7 @@ export const inspectObject = defineTool({
 export const getStorage = defineTool({
   name: 'get_storage',
   description:
-    'Gets browser storage data including cookies, localStorage, and sessionStorage.',
+    'Gets browser storage data including cookies, localStorage, and sessionStorage. Cookies are read via the Chrome DevTools Protocol (Network.getCookies), so httpOnly cookies (where auth/session tokens usually live) are included, along with rich attributes (domain, path, httpOnly, secure, sameSite, expires, etc.). localStorage and sessionStorage are read from the page context.',
   annotations: {
     title: 'Get Storage',
     category: ToolCategory.REVERSE_ENGINEERING,
@@ -1831,6 +1832,11 @@ export const getStorage = defineTool({
   handler: async (request, response, context) => {
     const {type, filter} = request.params;
 
+    const matchFilter = (key: string): boolean => {
+      if (!filter) return true;
+      return key.toLowerCase().includes(filter.toLowerCase());
+    };
+
     const storageCode = `
 (function() {
   const type = ${JSON.stringify(type)};
@@ -1840,17 +1846,6 @@ export const getStorage = defineTool({
   function matchFilter(key) {
     if (!filter) return true;
     return key.toLowerCase().includes(filter.toLowerCase());
-  }
-
-  if (type === 'all' || type === 'cookies') {
-    const cookies = {};
-    document.cookie.split(';').forEach(c => {
-      const [name, ...valueParts] = c.trim().split('=');
-      if (name && matchFilter(name)) {
-        cookies[name] = valueParts.join('=');
-      }
-    });
-    result.cookies = cookies;
   }
 
   if (type === 'all' || type === 'localStorage') {
@@ -1899,7 +1894,39 @@ export const getStorage = defineTool({
 
     try {
       const page = context.getSelectedPage();
-      const result = await page.evaluate(storageCode);
+      const result: Record<string, unknown> = {};
+
+      if (type === 'all' || type === 'cookies') {
+        // @ts-expect-error use existing CDP client (internal Puppeteer API).
+        const client = page._client() as CDPSession;
+        const {cookies} = await client.send('Network.getCookies');
+        result.cookies = cookies
+          .filter((cookie: Protocol.Network.Cookie) => matchFilter(cookie.name))
+          .map((cookie: Protocol.Network.Cookie) => ({
+            name: cookie.name,
+            value: cookie.value,
+            domain: cookie.domain,
+            path: cookie.path,
+            httpOnly: cookie.httpOnly,
+            secure: cookie.secure,
+            sameSite: cookie.sameSite,
+            expires: cookie.expires,
+            session: cookie.session,
+            size: cookie.size,
+          }));
+      }
+
+      if (
+        type === 'all' ||
+        type === 'localStorage' ||
+        type === 'sessionStorage'
+      ) {
+        const evaluated = (await page.evaluate(storageCode)) as Record<
+          string,
+          unknown
+        >;
+        Object.assign(result, evaluated);
+      }
 
       response.appendResponseLine(
         `Storage data${filter ? ` (filter: "${filter}")` : ''}:\n`,
