@@ -12,13 +12,7 @@ import {
   formatConsoleEventShort,
   formatConsoleEventVerbose,
 } from './formatters/consoleFormatter.js';
-import {
-  getFormattedHeaderValue,
-  getFormattedResponseBody,
-  getFormattedRequestBody,
-  getShortDescriptionForRequest,
-  getStatusFromRequest,
-} from './formatters/networkFormatter.js';
+import {getShortDescriptionForRequest} from './formatters/networkFormatter.js';
 import {formatSnapshotNode} from './formatters/snapshotFormatter.js';
 import type {McpContext} from './McpContext.js';
 import type {
@@ -39,7 +33,6 @@ import type {PaginationOptions} from './utils/types.js';
 export class McpResponse implements Response {
   #includePages = false;
   #snapshotParams?: SnapshotParams;
-  #attachedNetworkRequestId?: number;
   #attachedConsoleMessageId?: number;
   #textResponseLines: string[] = [];
   #images: ImageContentData[] = [];
@@ -126,10 +119,6 @@ export class McpResponse implements Response {
     };
   }
 
-  attachNetworkRequest(reqid: number): void {
-    this.#attachedNetworkRequestId = reqid;
-  }
-
   attachConsoleMessage(msgid: number): void {
     this.#attachedConsoleMessageId = msgid;
   }
@@ -144,9 +133,6 @@ export class McpResponse implements Response {
 
   get includeConsoleData(): boolean {
     return this.#consoleDataOptions?.include ?? false;
-  }
-  get attachedNetworkRequestId(): number | undefined {
-    return this.#attachedNetworkRequestId;
   }
   get networkRequestsPageIdx(): number | undefined {
     return this.#networkRequestsOptions?.pagination?.pageIdx;
@@ -205,24 +191,6 @@ export class McpResponse implements Response {
         } else {
           formattedSnapshot = formatSnapshotNode(snapshot.root, snapshot);
         }
-      }
-    }
-
-    const bodies: {
-      requestBody?: string;
-      responseBody?: string;
-    } = {};
-
-    if (this.#attachedNetworkRequestId) {
-      const request = context.getNetworkRequestById(
-        this.#attachedNetworkRequestId,
-      );
-
-      bodies.requestBody = await getFormattedRequestBody(request);
-
-      const response = request.response();
-      if (response) {
-        bodies.responseBody = await getFormattedResponseBody(response);
       }
     }
 
@@ -332,7 +300,6 @@ export class McpResponse implements Response {
     }
 
     return this.format(toolName, context, {
-      bodies,
       consoleData,
       consoleListData,
       formattedSnapshot,
@@ -343,10 +310,6 @@ export class McpResponse implements Response {
     toolName: string,
     context: McpContext,
     data: {
-      bodies: {
-        requestBody?: string;
-        responseBody?: string;
-      };
       consoleData: ConsoleMessageData | undefined;
       consoleListData: ConsoleMessageData[] | undefined;
       formattedSnapshot: string | undefined;
@@ -389,7 +352,6 @@ export class McpResponse implements Response {
       response.push(data.formattedSnapshot);
     }
 
-    response.push(...this.#formatNetworkRequestData(context, data.bodies));
     response.push(...this.#formatConsoleData(data.consoleData));
 
     if (this.#networkRequestsOptions?.include) {
@@ -495,65 +457,6 @@ export class McpResponse implements Response {
     }
 
     response.push(formatConsoleEventVerbose(data));
-    return response;
-  }
-
-  #formatNetworkRequestData(
-    context: McpContext,
-    data: {
-      requestBody?: string;
-      responseBody?: string;
-    },
-  ): string[] {
-    const response: string[] = [];
-    const id = this.#attachedNetworkRequestId;
-    if (!id) {
-      return response;
-    }
-
-    const httpRequest = context.getNetworkRequestById(id);
-    response.push(`## Request ${httpRequest.url()}`);
-    response.push(`Status:  ${getStatusFromRequest(httpRequest)}`);
-    response.push(`### Request Headers`);
-    for (const line of getFormattedHeaderValue(httpRequest.headers())) {
-      response.push(line);
-    }
-
-    if (data.requestBody) {
-      response.push(`### Request Body`);
-      response.push(data.requestBody);
-    }
-
-    const httpResponse = httpRequest.response();
-    if (httpResponse) {
-      response.push(`### Response Headers`);
-      for (const line of getFormattedHeaderValue(httpResponse.headers())) {
-        response.push(line);
-      }
-    }
-
-    if (data.responseBody) {
-      response.push(`### Response Body`);
-      response.push(data.responseBody);
-    }
-
-    const httpFailure = httpRequest.failure();
-    if (httpFailure) {
-      response.push(`### Request failed with`);
-      response.push(httpFailure.errorText);
-    }
-
-    const redirectChain = httpRequest.redirectChain();
-    if (redirectChain.length) {
-      response.push(`### Redirect chain`);
-      let indent = 0;
-      for (const request of redirectChain.reverse()) {
-        response.push(
-          `${'  '.repeat(indent)}${getShortDescriptionForRequest(request, context.getNetworkRequestStableId(request))}`,
-        );
-        indent++;
-      }
-    }
     return response;
   }
 

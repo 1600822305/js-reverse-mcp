@@ -9,12 +9,7 @@ import type {TextSnapshotNode} from '../McpContext.js';
 import type {NetworkManager} from '../network/NetworkManager.js';
 import type {RequestInitiator} from '../PageCollector.js';
 import {zod} from '../third_party/index.js';
-import type {
-  Dialog,
-  ElementHandle,
-  HTTPRequest,
-  Page,
-} from '../third_party/index.js';
+import type {Dialog, ElementHandle, Page} from '../third_party/index.js';
 import type {TraceResult} from '../trace-processing/parse.js';
 import type {PaginationOptions} from '../utils/types.js';
 
@@ -80,7 +75,6 @@ export interface Response {
   ): void;
   includeSnapshot(params?: SnapshotParams): void;
   attachImage(value: ImageContentData): void;
-  attachNetworkRequest(reqid: number): void;
   attachConsoleMessage(msgid: number): void;
   // Allows re-using DevTools data queried by some tools.
   attachDevToolsData(data: DevToolsData): void;
@@ -138,17 +132,9 @@ export type Context = Readonly<{
    */
   networkManager: NetworkManager;
   /**
-   * Get the initiator (call stack) for a network request.
-   */
-  getRequestInitiator(request: HTTPRequest): RequestInitiator | undefined;
-  /**
    * Get the initiator by request ID.
    */
   getRequestInitiatorById(requestId: number): RequestInitiator | undefined;
-  /**
-   * Get network request by ID.
-   */
-  getNetworkRequestById(reqid: number): HTTPRequest;
 }>;
 
 export function defineTool<Schema extends zod.ZodRawShape>(

@@ -85,38 +85,3 @@ export const listNetworkRequests = defineTool({
     });
   },
 });
-
-export const getNetworkRequest = defineTool({
-  name: 'get_network_request',
-  description: `Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel.`,
-  annotations: {
-    category: ToolCategory.NETWORK,
-    readOnlyHint: true,
-  },
-  schema: {
-    reqid: zod
-      .number()
-      .optional()
-      .describe(
-        'The reqid of the network request. If omitted returns the currently selected request in the DevTools Network panel.',
-      ),
-  },
-  handler: async (request, response, context) => {
-    if (request.params.reqid) {
-      response.attachNetworkRequest(request.params.reqid);
-    } else {
-      const data = await context.getDevToolsData();
-      response.attachDevToolsData(data);
-      const reqid = data?.cdpRequestId
-        ? context.resolveCdpRequestId(data.cdpRequestId)
-        : undefined;
-      if (reqid) {
-        response.attachNetworkRequest(reqid);
-      } else {
-        response.appendResponseLine(
-          `Nothing is currently selected in the DevTools Network panel.`,
-        );
-      }
-    }
-  },
-});

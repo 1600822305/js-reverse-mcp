@@ -7,12 +7,11 @@
   - [`navigate_page`](#navigate_page)
   - [`new_page`](#new_page)
   - [`select_page`](#select_page)
-- **[Network](#network)** (9 tools)
+- **[Network](#network)** (8 tools)
   - [`api_request`](#api_request)
   - [`delete_token`](#delete_token)
   - [`extract_page_token`](#extract_page_token)
   - [`firebase_login`](#firebase_login)
-  - [`get_network_request`](#get_network_request)
   - [`list_network_requests`](#list_network_requests)
   - [`list_tokens`](#list_tokens)
   - [`save_token`](#save_token)
@@ -23,7 +22,7 @@
   - [`list_console_messages`](#list_console_messages)
   - [`take_screenshot`](#take_screenshot)
   - [`take_snapshot`](#take_snapshot)
-- **[JS Reverse Engineering](#js-reverse-engineering)** (75 tools)
+- **[JS Reverse Engineering](#js-reverse-engineering)** (74 tools)
   - [`add_network_rule`](#add_network_rule)
   - [`analyze_encoded_string`](#analyze_encoded_string)
   - [`batch_replay`](#batch_replay)
@@ -47,7 +46,6 @@
   - [`find_in_script`](#find_in_script)
   - [`get_cookies`](#get_cookies)
   - [`get_paused_info`](#get_paused_info)
-  - [`get_request_initiator`](#get_request_initiator)
   - [`get_response_body`](#get_response_body)
   - [`get_script_source`](#get_script_source)
   - [`get_storage`](#get_storage)
@@ -202,16 +200,6 @@
 - **password** (string) **(required)**: Password.
 - **saveName** (string) **(required)**: Name to save the token as.
 - **setActive** (boolean) _(optional)_: Set as active token (default: true).
-
----
-
-### `get_network_request`
-
-**Description:** Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel.
-
-**Parameters:**
-
-- **reqid** (number) _(optional)_: The reqid of the network request. If omitted returns the currently selected request in the DevTools Network panel.
 
 ---
 
@@ -624,16 +612,6 @@ in the DevTools Elements panel (if any).
 
 - **includeScopes** (boolean) _(optional)_: Whether to include scope variables (default: true).
 - **maxScopeDepth** (integer) _(optional)_: Maximum scope depth to traverse (default: 2).
-
----
-
-### `get_request_initiator`
-
-**Description:** Gets the JavaScript call stack that initiated a network request. This helps trace which code triggered an API call.
-
-**Parameters:**
-
-- **requestId** (integer) **(required)**: The request ID (from [`list_network_requests`](#list_network_requests)) to get the initiator for.
 
 ---
 
