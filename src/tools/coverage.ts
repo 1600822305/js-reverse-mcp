@@ -78,6 +78,18 @@ export const startJSCoverage = defineTool({
     }
 
     try {
+      const page = context.getSelectedPage();
+
+      // Report whether collection was already running before (re)starting.
+      const previousState = (await page.evaluate(
+        `(window.__mcp_coverage__ && window.__mcp_coverage__.js) || null`,
+      )) as {active?: boolean; startTime?: string} | null;
+      if (previousState?.active) {
+        response.appendResponseLine(
+          `ℹ️ JavaScript coverage was already active (started ${previousState.startTime}); restarting collection.`,
+        );
+      }
+
       // Enable Profiler domain for coverage
       await client.send('Profiler.enable');
 
@@ -91,7 +103,6 @@ export const startJSCoverage = defineTool({
       await client.send('Debugger.enable');
 
       // Store coverage state in page context
-      const page = context.getSelectedPage();
       await page.evaluate(
         `
         window.__mcp_coverage__ = window.__mcp_coverage__ || {};
@@ -349,52 +360,6 @@ export const stopJSCoverage = defineTool({
       response.appendResponseLine(
         '- Use get_script_source to examine specific scripts',
       );
-    } catch (error) {
-      response.appendResponseLine(
-        `Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  },
-});
-
-
-/**
- * Get combined coverage report.
- */
-export const getCoverageReport = defineTool({
-  name: 'get_coverage_report',
-  description:
-    'Gets the current coverage status for both JavaScript and CSS, showing what coverage collection is active.',
-  annotations: {
-    title: 'Get Coverage Report',
-    category: ToolCategory.REVERSE_ENGINEERING,
-    readOnlyHint: true,
-  },
-  schema: {},
-  handler: async (request, response, context) => {
-    try {
-      const page = context.getSelectedPage();
-
-      const coverageState = (await page.evaluate(
-        `window.__mcp_coverage__ || {}`,
-      )) as {
-        js?: {active: boolean; startTime: string};
-      };
-
-      response.appendResponseLine('📊 JavaScript Coverage Status\n');
-
-      if (coverageState.js?.active) {
-        response.appendResponseLine(
-          `✅ JavaScript coverage: Active (started ${coverageState.js.startTime})`,
-        );
-      } else {
-        response.appendResponseLine(
-          '❌ JavaScript coverage: Inactive (use start_js_coverage)',
-        );
-      }
-
-      response.appendResponseLine('');
-      response.appendResponseLine('Use stop_js_coverage to generate report.');
     } catch (error) {
       response.appendResponseLine(
         `Error: ${error instanceof Error ? error.message : String(error)}`,

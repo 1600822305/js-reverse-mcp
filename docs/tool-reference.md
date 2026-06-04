@@ -7,9 +7,16 @@
   - [`navigate_page`](#navigate_page)
   - [`new_page`](#new_page)
   - [`select_page`](#select_page)
-- **[Network](#network)** (2 tools)
+- **[Network](#network)** (9 tools)
+  - [`api_request`](#api_request)
+  - [`delete_token`](#delete_token)
+  - [`extract_page_token`](#extract_page_token)
+  - [`firebase_login`](#firebase_login)
   - [`get_network_request`](#get_network_request)
   - [`list_network_requests`](#list_network_requests)
+  - [`list_tokens`](#list_tokens)
+  - [`save_token`](#save_token)
+  - [`set_active_token`](#set_active_token)
 - **[Debugging](#debugging)** (5 tools)
   - [`evaluate_script`](#evaluate_script)
   - [`get_console_message`](#get_console_message)
@@ -23,14 +30,15 @@
   - [`break_on_node_removed`](#break_on_node_removed)
   - [`break_on_subtree_modified`](#break_on_subtree_modified)
   - [`break_on_xhr`](#break_on_xhr)
+  - [`decode_network_protobuf`](#decode_network_protobuf)
+  - [`decode_protobuf`](#decode_protobuf)
   - [`decrypt_strings`](#decrypt_strings)
   - [`detect_encryption`](#detect_encryption)
   - [`diff_globals`](#diff_globals)
+  - [`encode_protobuf`](#encode_protobuf)
   - [`evaluate_on_callframe`](#evaluate_on_callframe)
   - [`find_crypto_functions`](#find_crypto_functions)
   - [`find_in_script`](#find_in_script)
-  - [`get_coverage_report`](#get_coverage_report)
-  - [`get_form_data`](#get_form_data)
   - [`get_paused_info`](#get_paused_info)
   - [`get_request_initiator`](#get_request_initiator)
   - [`get_script_source`](#get_script_source)
@@ -46,7 +54,6 @@
   - [`list_scripts`](#list_scripts)
   - [`list_watchers`](#list_watchers)
   - [`list_websocket_connections`](#list_websocket_connections)
-  - [`mock_api_response`](#mock_api_response)
   - [`monitor_events`](#monitor_events)
   - [`monitor_form_submit`](#monitor_form_submit)
   - [`monitor_input_changes`](#monitor_input_changes)
@@ -76,6 +83,15 @@
   - [`unhook_function`](#unhook_function)
   - [`unwatch_global`](#unwatch_global)
   - [`watch_global`](#watch_global)
+- **[Web Scraping](#web-scraping)** (8 tools)
+  - [`click_and_extract`](#click_and_extract)
+  - [`extract_form_data`](#extract_form_data)
+  - [`extract_links`](#extract_links)
+  - [`extract_metadata`](#extract_metadata)
+  - [`extract_structured`](#extract_structured)
+  - [`extract_table`](#extract_table)
+  - [`extract_text_blocks`](#extract_text_blocks)
+  - [`smart_extract`](#smart_extract)
 
 ## Navigation automation
 
@@ -123,6 +139,60 @@
 
 ## Network
 
+### `api_request`
+
+**Description:** Make an HTTP request from the browser context. Supports custom method, headers, body, and automatic token injection. The request is executed inside the browser page using fetch(), so it shares cookies and origin with the page. Use tokenName or the active token for automatic auth header injection.
+
+**Parameters:**
+
+- **body** (string) _(optional)_: Request body. For JSON, pass a JSON string. For form data, pass URL-encoded string.
+- **connectProtocol** (boolean) _(optional)_: If true, adds connect-protocol-version: 1 header (for gRPC-Connect APIs).
+- **headers** (object) _(optional)_: Custom headers to include. Common ones like content-type are auto-set for JSON.
+- **includeTokenInBody** (boolean) _(optional)_: If true, also includes the token as "auth_token" field in the JSON body.
+- **jsonBody** (object) _(optional)_: Request body as a JSON object (alternative to body string). Will be JSON.stringify-ed automatically.
+- **maxResponseLength** (integer) _(optional)_: Maximum response body length to return (default: 2000). Set to 0 for unlimited.
+- **method** (enum: "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS") _(optional)_: HTTP method (default: POST).
+- **tokenHeader** (string) _(optional)_: Header name for the auth token (default: "x-auth-token"). Use "Authorization" for Bearer tokens.
+- **tokenName** (string) _(optional)_: Name of a saved token to use. If omitted, uses the active token.
+- **url** (string) **(required)**: The URL to request. Can be relative (e.g. "/\_backend/...") or absolute.
+
+---
+
+### `delete_token`
+
+**Description:** Delete a saved token by name.
+
+**Parameters:**
+
+- **name** (string) **(required)**: The name of the token to delete.
+
+---
+
+### `extract_page_token`
+
+**Description:** Extract authentication tokens from the current page. Searches React fiber state, cookies, localStorage, and common global variables for auth tokens. Optionally saves the found token.
+
+**Parameters:**
+
+- **saveName** (string) _(optional)_: If provided, save the found token with this name.
+- **setActive** (boolean) _(optional)_: If true and saveName is provided, set as active token.
+
+---
+
+### `firebase_login`
+
+**Description:** Login with email/password using Firebase Auth and save the resulting token. Useful for quickly switching between accounts.
+
+**Parameters:**
+
+- **apiKey** (string) _(optional)_: Firebase API key (default: Windsurf key).
+- **email** (string) **(required)**: Email address to login with.
+- **password** (string) **(required)**: Password.
+- **saveName** (string) **(required)**: Name to save the token as.
+- **setActive** (boolean) _(optional)_: Set as active token (default: true).
+
+---
+
 ### `get_network_request`
 
 **Description:** Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel.
@@ -146,6 +216,38 @@
 
 ---
 
+### `list_tokens`
+
+**Description:** List all saved authentication tokens. Shows name, type, metadata, and which one is active.
+
+**Parameters:** None
+
+---
+
+### `save_token`
+
+**Description:** Save an authentication token with a name for later use. Supports multiple tokens for different accounts/services. Use [`list_tokens`](#list_tokens) to see saved tokens and [`set_active_token`](#set_active_token) to switch between them.
+
+**Parameters:**
+
+- **metadata** (object) _(optional)_: Optional metadata to associate with this token (e.g. {"email": "user@example.com", "plan": "free"}).
+- **name** (string) **(required)**: A short name for this token (e.g. "free_account", "trial_user", "pro_user").
+- **setActive** (boolean) _(optional)_: Whether to set this token as the active token (default: false).
+- **token** (string) **(required)**: The token value to save.
+- **type** (enum: "firebase", "jwt", "api*key", "bearer", "custom") *(optional)\_: Type of token (default: "bearer").
+
+---
+
+### `set_active_token`
+
+**Description:** Set a saved token as the active token. The active token is automatically used by [`api_request`](#api_request) when no explicit token is provided.
+
+**Parameters:**
+
+- **name** (string) **(required)**: The name of the saved token to set as active.
+
+---
+
 ## Debugging
 
 ### `evaluate_script`
@@ -157,15 +259,14 @@ so returned values have to JSON-serializable.
 
 - **args** (array) _(optional)_: An optional list of arguments to pass to the function.
 - **function** (string) **(required)**: A JavaScript function declaration to be executed by the tool in the currently selected page.
-Example without arguments: `() => {
+  Example without arguments: `() => {
   return document.title
 }` or `async () => {
   return await fetch("example.com")
 }`.
-Example with arguments: `(el) => {
+  Example with arguments: `(el) => {
   return el.innerText;
 }`
-
 
 ---
 
@@ -285,6 +386,34 @@ in the DevTools Elements panel (if any).
 
 ---
 
+### `decode_network_protobuf`
+
+**Description:** Fetch a URL and decode the response as protobuf binary. Useful for inspecting gRPC-Connect API responses that use application/proto or application/connect+proto content type.
+
+**Parameters:**
+
+- **body** (string) _(optional)_: Request body (hex-encoded protobuf or JSON string).
+- **bodyFormat** (enum: "hex", "json", "raw") _(optional)_: Format of the request body.
+- **headers** (object) _(optional)_: Custom headers.
+- **maxDepth** (integer) _(optional)_: Maximum depth for nested message decoding (default: 3).
+- **method** (enum: "GET", "POST") _(optional)_: HTTP method (default: POST).
+- **skipBytes** (integer) _(optional)_: Number of bytes to skip at the start of response (e.g. 5 for gRPC-Connect frame header).
+- **url** (string) **(required)**: URL to fetch.
+
+---
+
+### `decode_protobuf`
+
+**Description:** Decode raw protobuf binary data without a .proto schema. Analyzes wire format to extract field numbers, types, and values. Supports nested messages, strings, integers, and floating point. Input can be hex string or base64.
+
+**Parameters:**
+
+- **data** (string) **(required)**: Protobuf data as hex string (e.g. "0a0548656c6c6f") or base64 string.
+- **format** (enum: "hex", "base64", "auto") _(optional)_: Input format (default: auto-detect).
+- **maxDepth** (integer) _(optional)_: Maximum depth for nested message decoding (default: 3).
+
+---
+
 ### `decrypt_strings`
 
 **Description:** Attempts to decrypt and decode obfuscated strings in JavaScript code. Detects common string obfuscation patterns including base64, hex encoding, and custom encryption.
@@ -293,7 +422,7 @@ in the DevTools Elements panel (if any).
 
 - **autoDetect** (boolean) _(optional)_: Automatically detect and decrypt common encoding schemes (default: true).
 - **code** (string) _(optional)_: JavaScript code to analyze.
-- **customDecryptFunction** (string) _(optional)_: Name of a custom decryption function found in the code (e.g., "_0x1234"). The tool will try to use it.
+- **customDecryptFunction** (string) _(optional)_: Name of a custom decryption function found in the code (e.g., "\_0x1234"). The tool will try to use it.
 - **scriptId** (string) _(optional)_: The script ID to analyze (from [`list_scripts`](#list_scripts)).
 
 ---
@@ -316,6 +445,16 @@ in the DevTools Elements panel (if any).
 
 - **showUnchanged** (boolean) _(optional)_: Whether to show unchanged variables (default: false).
 - **snapshotId** (string) _(optional)_: ID of the snapshot to compare with (default: "default").
+
+---
+
+### `encode_protobuf`
+
+**Description:** Encode data to protobuf binary format without a .proto schema. Specify field numbers, types, and values to build a protobuf message. Returns hex and base64 encoded output.
+
+**Parameters:**
+
+- **fields** (array) **(required)**: Array of fields to encode.
 
 ---
 
@@ -352,24 +491,6 @@ in the DevTools Elements panel (if any).
 - **occurrence** (integer) _(optional)_: Which occurrence to find (1 = first, 2 = second, etc.).
 - **query** (string) **(required)**: The string to find in the script.
 - **scriptId** (string) **(required)**: The script ID to search in (from [`list_scripts`](#list_scripts)).
-
----
-
-### `get_coverage_report`
-
-**Description:** Gets the current coverage status for both JavaScript and CSS, showing what coverage collection is active.
-
-**Parameters:** None
-
----
-
-### `get_form_data`
-
-**Description:** Gets all form data from the page including hidden fields. Useful for understanding what data is being submitted.
-
-**Parameters:**
-
-- **selector** (string) _(optional)_: CSS selector for the form(s) to inspect.
 
 ---
 
@@ -458,16 +579,17 @@ in the DevTools Elements panel (if any).
 
 ### `intercept_requests`
 
-**Description:** Starts intercepting network requests. Allows modifying requests before they are sent, or providing mock responses.
+**Description:** Starts intercepting network requests. Allows logging, modifying requests before they are sent, blocking them, or returning mock responses (with optional response delay).
 
 **Parameters:**
 
 - **action** (enum: "log", "modify", "block", "mock") **(required)**: Action to take: log (just log), modify (modify request), block (block request), mock (return mock response).
+- **delay** (integer) _(optional)_: Response delay in milliseconds before returning the mock response (for mock action). Default: 0.
 - **interceptId** (string) _(optional)_: Custom ID for this interceptor.
 - **mockResponse** (object) _(optional)_: Mock response to return (for mock action).
 - **modifyBody** (string) _(optional)_: New request body (for modify action).
 - **modifyHeaders** (object) _(optional)_: Headers to add/modify (for modify action). Use null value to remove a header.
-- **urlPattern** (string) **(required)**: URL pattern to intercept (supports * wildcard).
+- **urlPattern** (string) **(required)**: URL pattern to intercept (supports \* wildcard).
 
 ---
 
@@ -531,19 +653,6 @@ in the DevTools Elements panel (if any).
 **Description:** Lists all tracked WebSocket connections from active monitors.
 
 **Parameters:** None
-
----
-
-### `mock_api_response`
-
-**Description:** Quickly set up a mock response for an API endpoint. Simplified interface for common mocking scenarios.
-
-**Parameters:**
-
-- **delay** (integer) _(optional)_: Response delay in milliseconds (default: 0).
-- **response** (string) **(required)**: JSON response body to return.
-- **status** (integer) _(optional)_: HTTP status code (default: 200).
-- **url** (string) **(required)**: URL pattern to mock (supports * wildcard). Example: "*/api/user*"
 
 ---
 
@@ -863,5 +972,101 @@ in the DevTools Elements panel (if any).
 - **logStack** (boolean) _(optional)_: Whether to log the call stack when variable changes (default: true).
 - **variableName** (string) **(required)**: The name of the global variable to watch (e.g., "token", "appConfig.apiKey").
 - **watchId** (string) _(optional)_: Custom ID for this watcher. Defaults to variable name.
+
+---
+
+## Web Scraping
+
+### `click_and_extract`
+
+**Description:** Click an element and then extract content after the page updates. Useful for loading more content or navigating tabs.
+
+**Parameters:**
+
+- **clickSelector** (string) **(required)**: CSS selector for the element to click.
+- **extractAttribute** (string) _(optional)_: Attribute to extract. If not specified, extracts text content.
+- **extractSelector** (string) **(required)**: CSS selector for the content to extract after clicking.
+- **waitMs** (integer) _(optional)_: Milliseconds to wait after clicking before extracting (default: 1000).
+
+---
+
+### `extract_form_data`
+
+**Description:** Extract form structure and current values, including hidden fields. By default returns all matching forms; pass formIndex to inspect a single form. Password values are masked unless maskPasswords is set to false.
+
+**Parameters:**
+
+- **formIndex** (integer) _(optional)_: Index of a single form to inspect when multiple forms match. When omitted, all matching forms are returned.
+- **formSelector** (string) _(optional)_: CSS selector for the form(s) (default: "form").
+- **maskPasswords** (boolean) _(optional)_: Mask password field values as "**\*\*\*\***" instead of returning the plaintext value (default: true).
+
+---
+
+### `extract_links`
+
+**Description:** Extract all links (anchor tags) from the page. Optionally filter by pattern.
+
+**Parameters:**
+
+- **containerSelector** (string) _(optional)_: CSS selector for the container to search within. Omit for entire page.
+- **includeText** (boolean) _(optional)_: Include link text in results (default: true).
+- **urlPattern** (string) _(optional)_: Regex pattern to filter URLs. Only matching URLs will be returned.
+
+---
+
+### `extract_metadata`
+
+**Description:** Extract page metadata including JSON-LD, Open Graph, Twitter cards, and standard meta tags.
+
+**Parameters:** None
+
+---
+
+### `extract_structured`
+
+**Description:** Extract structured data from the page using a schema of CSS selectors. Perfect for extracting multiple related fields at once.
+
+**Parameters:**
+
+- **containerSelector** (string) _(optional)_: CSS selector for repeating container (for lists). If specified, extracts an array of items.
+- **fields** (object) **(required)**: Object mapping field names to CSS selectors. Example: {"title": "h1", "price": ".price", "description": ".desc"}
+- **limit** (integer) _(optional)_: Maximum number of items to extract when using containerSelector.
+
+---
+
+### `extract_table`
+
+**Description:** Extract data from HTML tables. Returns structured array with headers and rows.
+
+**Parameters:**
+
+- **hasHeader** (boolean) _(optional)_: Whether the first row is a header (default: true).
+- **selector** (string) _(optional)_: CSS selector for the table (default: "table").
+- **tableIndex** (integer) _(optional)_: Index of the table if multiple tables match (default: 0).
+
+---
+
+### `extract_text_blocks`
+
+**Description:** Extract text content organized by sections (headings and their following content). Useful for article/documentation pages.
+
+**Parameters:**
+
+- **containerSelector** (string) _(optional)_: CSS selector for the main content container (default: "body").
+- **headingLevel** (string) _(optional)_: Heading selectors to use (default: "h1,h2,h3,h4,h5,h6").
+- **includeSubheadings** (boolean) _(optional)_: Include subheadings within each section (default: true).
+
+---
+
+### `smart_extract`
+
+**Description:** Extract content from the page using CSS selectors. Returns text content, attributes, or HTML of matched elements.
+
+**Parameters:**
+
+- **attribute** (string) _(optional)_: Attribute to extract (e.g., "href", "src"). If not specified, extracts text content.
+- **limit** (integer) _(optional)_: Maximum number of elements to extract. Omit for all matches.
+- **returnHtml** (boolean) _(optional)_: If true, returns innerHTML instead of text content.
+- **selector** (string) **(required)**: CSS selector to match elements.
 
 ---
