@@ -23,9 +23,10 @@
   - [`list_console_messages`](#list_console_messages)
   - [`take_screenshot`](#take_screenshot)
   - [`take_snapshot`](#take_snapshot)
-- **[JS Reverse Engineering](#js-reverse-engineering)** (74 tools)
+- **[JS Reverse Engineering](#js-reverse-engineering)** (75 tools)
   - [`add_network_rule`](#add_network_rule)
   - [`analyze_encoded_string`](#analyze_encoded_string)
+  - [`batch_replay`](#batch_replay)
   - [`beautify_script`](#beautify_script)
   - [`break_on_attribute_modified`](#break_on_attribute_modified)
   - [`break_on_node_removed`](#break_on_node_removed)
@@ -369,6 +370,24 @@ in the DevTools Elements panel (if any).
 
 - **input** (string) **(required)**: The encoded string to analyze.
 - **tryDecode** (boolean) _(optional)_: Whether to attempt decoding (default: true).
+
+---
+
+### `batch_replay`
+
+**Description:** Replays multiple requests in sequence and summarises each response. Source the requests either from captured ids (requestIds, from [`search_network`](#search_network)) or from a HAR file on disk (harFile, e.g. one exported by [`export_har`](#export_har)). HAR entries can be narrowed by urlPattern/methods/limit. Useful for re-running a recorded flow or fuzzing a sequence of signed API calls. Cookies/auth are included via the page context.
+
+**Parameters:**
+
+- **delayMs** (integer) _(optional)_: Delay between requests in milliseconds (default 0).
+- **harFile** (string) _(optional)_: Path to a HAR file; its log.entries[].request entries are replayed.
+- **isRegex** (boolean) _(optional)_: Treat urlPattern as a regular expression.
+- **limit** (integer) _(optional)_: Maximum number of requests to replay (default 20).
+- **maxResponseLength** (integer) _(optional)_: Max response body characters to show per request (default 500).
+- **methods** (array) _(optional)_: Only replay HAR entries with these HTTP methods.
+- **requestIds** (array) _(optional)_: Numeric request ids from [`search_network`](#search_network) to replay in order.
+- **setHeaders** (object) _(optional)_: Headers to add/override on every replayed request.
+- **urlPattern** (string) _(optional)_: Only replay HAR entries whose URL matches this glob/substring.
 
 ---
 

@@ -4,39 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {runReplay, sanitizeHeaders} from '../../network/replay-exec.js';
 import {zod} from '../../third_party/index.js';
 import {ToolCategory} from '../categories.js';
 import {defineTool} from '../ToolDefinition.js';
-
-// Headers the Fetch API forbids scripts from setting.
-const FORBIDDEN_HEADERS = new Set([
-  'host',
-  'content-length',
-  'connection',
-  'keep-alive',
-  'transfer-encoding',
-  'upgrade',
-  'cookie',
-  'origin',
-  'referer',
-  'accept-encoding',
-  'accept-charset',
-  'sec-fetch-mode',
-  'sec-fetch-site',
-  'sec-fetch-dest',
-]);
-
-function sanitizeHeaders(
-  headers: Record<string, string>,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [name, value] of Object.entries(headers)) {
-    if (!FORBIDDEN_HEADERS.has(name.toLowerCase())) {
-      out[name] = value;
-    }
-  }
-  return out;
-}
 
 export const replayRequest = defineTool({
   name: 'replay_request',
@@ -97,47 +68,9 @@ export const replayRequest = defineTool({
         ? undefined
         : await context.networkManager.store.getRequestBody(params.requestId));
 
-    const replayCode = `
-(async () => {
-  const url = ${JSON.stringify(url)};
-  const init = {
-    method: ${JSON.stringify(method)},
-    headers: ${JSON.stringify(headers)},
-    credentials: 'include',
-  };
-  ${body !== undefined ? `init.body = ${JSON.stringify(body)};` : ''}
-  const started = performance.now();
-  try {
-    const resp = await fetch(url, init);
-    const text = await resp.text();
-    const respHeaders = {};
-    resp.headers.forEach((v, k) => { respHeaders[k] = v; });
-    return {
-      ok: true,
-      status: resp.status,
-      statusText: resp.statusText,
-      headers: respHeaders,
-      body: text,
-      durationMs: Math.round(performance.now() - started),
-    };
-  } catch (e) {
-    return { ok: false, error: String(e) };
-  }
-})();
-`;
-
     try {
       const page = context.getSelectedPage();
-      const result = (await page.evaluate(replayCode)) as
-        | {
-            ok: true;
-            status: number;
-            statusText: string;
-            headers: Record<string, string>;
-            body: string;
-            durationMs: number;
-          }
-        | {ok: false; error: string};
+      const result = await runReplay(page, {url, method, headers, body});
 
       if (!result.ok) {
         response.appendResponseLine(`Replay failed: ${result.error}`);
