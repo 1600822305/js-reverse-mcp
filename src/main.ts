@@ -40,6 +40,7 @@ import * as domTools from './tools/dom.js';
 import * as globalsTools from './tools/globals.js';
 import * as networkCaptureTools from './tools/network/capture.js';
 import * as networkConditionsTools from './tools/network/conditions.js';
+import * as networkCookieTools from './tools/network/cookies.js';
 import * as networkEventSourceTools from './tools/network/eventsource.js';
 import * as networkReplayTools from './tools/network/replay.js';
 import * as networkRuleTools from './tools/network/rules.js';
@@ -250,6 +251,7 @@ const tools = [
   ...Object.values(networkTools),
   ...Object.values(networkCaptureTools),
   ...Object.values(networkConditionsTools),
+  ...Object.values(networkCookieTools),
   ...Object.values(networkEventSourceTools),
   ...Object.values(networkReplayTools),
   ...Object.values(networkRuleTools),

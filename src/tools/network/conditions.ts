@@ -205,3 +205,60 @@ export const clearNetworkConditions = defineTool({
     response.appendResponseLine('Network conditions reset to defaults.');
   },
 });
+
+export const setCacheDisabled = defineTool({
+  name: 'set_cache_disabled',
+  description:
+    'Toggles the browser cache for the page via CDP Network.setCacheDisabled. ' +
+    'Disable it to force real network responses (no 304 / disk cache) while ' +
+    'capturing or replaying traffic.',
+  annotations: {
+    title: 'Set Cache Disabled',
+    category: ToolCategory.REVERSE_ENGINEERING,
+    readOnlyHint: false,
+  },
+  schema: {
+    disabled: zod
+      .boolean()
+      .describe('True to bypass the cache, false to re-enable it.'),
+  },
+  handler: async (request, response, context) => {
+    const client = context.networkManager.getClient();
+    if (!client) {
+      response.appendResponseLine(
+        'Network manager is not bound. Select a page first.',
+      );
+      return;
+    }
+    await client.send('Network.setCacheDisabled', {
+      cacheDisabled: request.params.disabled,
+    });
+    response.appendResponseLine(
+      request.params.disabled ? 'Cache disabled.' : 'Cache enabled.',
+    );
+  },
+});
+
+export const clearBrowserCache = defineTool({
+  name: 'clear_browser_cache',
+  description:
+    'Clears the browser HTTP cache via CDP Network.clearBrowserCache so the ' +
+    'next requests hit the network.',
+  annotations: {
+    title: 'Clear Browser Cache',
+    category: ToolCategory.REVERSE_ENGINEERING,
+    readOnlyHint: false,
+  },
+  schema: {},
+  handler: async (_request, response, context) => {
+    const client = context.networkManager.getClient();
+    if (!client) {
+      response.appendResponseLine(
+        'Network manager is not bound. Select a page first.',
+      );
+      return;
+    }
+    await client.send('Network.clearBrowserCache');
+    response.appendResponseLine('Browser cache cleared.');
+  },
+});
