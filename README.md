@@ -152,19 +152,30 @@ claude mcp add js-reverse node /你的路径/js-reverse-mcp/build/src/index.js
 
 ### 网络调试
 
-| 工具                         | 描述                                                                                  |
-| ---------------------------- | ------------------------------------------------------------------------------------- |
-| `list_network_requests`      | 列出页面所有网络请求                                                                  |
-| `get_network_request`        | 获取请求详情和响应内容                                                                |
-| `get_request_initiator`      | 获取网络请求的 JavaScript 调用栈                                                      |
-| `break_on_xhr`               | 设置 XHR/Fetch URL 断点                                                               |
-| `remove_xhr_breakpoint`      | 移除 XHR 断点                                                                         |
-| `intercept_requests`         | 拦截网络请求：记录/修改/阻断请求，或返回 Mock 响应（支持 `delay` 延迟和默认 CORS 头） |
-| `stop_interceptor`           | 停止请求拦截器                                                                        |
-| `list_interceptors`          | 列出所有活动的拦截器                                                                  |
-| `monitor_websocket`          | 监控 WebSocket 连接，记录收发消息                                                     |
-| `stop_websocket_monitor`     | 停止 WebSocket 监控                                                                   |
-| `list_websocket_connections` | 列出所有追踪的 WebSocket 连接                                                         |
+| 工具                         | 描述                                                                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `list_network_requests`      | 列出页面所有网络请求（基于 DevTools 面板）                                                                                   |
+| `get_network_request`        | 获取请求详情和响应内容                                                                                                       |
+| `get_request_initiator`      | 获取网络请求的 JavaScript 调用栈                                                                                             |
+| `break_on_xhr`               | 设置 XHR/Fetch URL 断点                                                                                                      |
+| `remove_xhr_breakpoint`      | 移除 XHR 断点                                                                                                                |
+| `search_network`             | 在 CDP 抓包仓库中按 URL/方法/状态/资源类型检索，支持跨请求/响应体全文搜索（导航后仍保留）                                    |
+| `get_response_body`          | 按数字 id 获取抓到的完整响应体（二进制返回 base64）                                                                          |
+| `export_har`                 | 将抓到的网络流量导出为 HAR 1.2 文件（可含响应体）                                                                            |
+| `replay_request`             | 在页面上下文用 `fetch()` 重放抓到的请求（带 Cookie），可覆盖 URL/方法/头/体                                                  |
+| `add_network_rule`           | 新增拦截规则（替代旧 `intercept_requests`）：单一 Fetch 派发器，多规则共存，支持 Request/Response 两个阶段，可改写真实响应体 |
+| `list_network_rules`         | 列出活动拦截规则及命中统计                                                                                                   |
+| `remove_network_rule`        | 按 id 移除拦截规则（移除最后一条后自动关闭 Fetch 拦截）                                                                      |
+| `monitor_websocket`          | 通过 CDP 原生事件捕获 WebSocket 帧（含导航前/二进制帧，不可被页面探测）                                                      |
+| `stop_websocket_monitor`     | 停止 WebSocket 捕获（已抓数据保留）                                                                                          |
+| `list_websocket_connections` | 列出追踪的 WebSocket 连接及收发计数                                                                                          |
+| `list_websocket_messages`    | 列出抓到的 WebSocket 帧，可按连接/方向/URL/内容过滤（二进制显示为 base64）                                                   |
+| `monitor_eventsource`        | 通过 CDP 捕获 Server-Sent Events (EventSource) 消息                                                                          |
+| `stop_eventsource_monitor`   | 停止 SSE 捕获                                                                                                                |
+| `list_eventsource_messages`  | 列出抓到的 SSE 消息，可按 URL/内容过滤                                                                                       |
+| `set_network_conditions`     | 模拟网络条件（离线/限速/延迟）并可覆盖 User-Agent（CDP Network 域）                                                          |
+| `set_extra_headers`          | 为后续所有请求设置额外 HTTP 头（传空对象清除）                                                                               |
+| `clear_network_conditions`   | 重置网络模拟、UA 覆盖与额外头                                                                                                |
 
 ### API 调试与 Token 管理
 

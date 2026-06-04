@@ -12,6 +12,7 @@ import {type AggregatedIssue} from '../node_modules/chrome-devtools-frontend/mcp
 
 import {DebuggerContext} from './DebuggerContext.js';
 import {extractUrlLikeFromDevToolsTitle, urlsEqual} from './DevtoolsUtils.js';
+import {NetworkManager} from './network/NetworkManager.js';
 import type {ListenerMap, RequestInitiator} from './PageCollector.js';
 import {NetworkCollector, ConsoleCollector} from './PageCollector.js';
 import {Locator} from './third_party/index.js';
@@ -107,6 +108,7 @@ export class McpContext implements Context {
   #cpuThrottlingRateMap = new WeakMap<Page, number>();
   #dialog?: Dialog;
   #debuggerContext: DebuggerContext = new DebuggerContext();
+  #networkManager: NetworkManager;
 
   #nextSnapshotId = 1;
   #traceResults: TraceResult[] = [];
@@ -124,6 +126,7 @@ export class McpContext implements Context {
     this.logger = logger;
     this.#locatorClass = locatorClass;
     this.#options = options;
+    this.#networkManager = new NetworkManager(logger);
 
     this.#networkCollector = new NetworkCollector(
       this.browser,
@@ -172,6 +175,7 @@ export class McpContext implements Context {
       // @ts-expect-error _client is internal Puppeteer API
       const client = page._client();
       await this.#debuggerContext.enable(client);
+      await this.#networkManager.bind(client);
     } catch (error) {
       this.logger('Failed to initialize debugger context', error);
     }
@@ -180,6 +184,7 @@ export class McpContext implements Context {
   dispose() {
     this.#networkCollector.dispose();
     this.#consoleCollector.dispose();
+    this.#networkManager.unbind();
     void this.#debuggerContext.disable();
   }
 
@@ -195,8 +200,13 @@ export class McpContext implements Context {
    * Call this after selecting a new page.
    */
   async reinitDebugger(): Promise<void> {
+    this.#networkManager.unbind();
     await this.#debuggerContext.disable();
     await this.#initDebugger();
+  }
+
+  get networkManager(): NetworkManager {
+    return this.#networkManager;
   }
 
   static async from(
@@ -341,7 +351,9 @@ export class McpContext implements Context {
       // Try to auto-recover by selecting another open page
       const openPages = this.#pages.filter(p => !p.isClosed());
       if (openPages.length > 0) {
-        this.logger('Selected page closed, auto-switching to another open page');
+        this.logger(
+          'Selected page closed, auto-switching to another open page',
+        );
         this.selectPage(openPages[0]);
         return openPages[0];
       }
