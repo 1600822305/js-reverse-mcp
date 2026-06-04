@@ -643,6 +643,16 @@ export class McpContext implements Context {
     }
   }
 
+  async loadFile(filename: string): Promise<Uint8Array> {
+    try {
+      const filePath = path.resolve(filename);
+      return new Uint8Array(await fs.readFile(filePath));
+    } catch (err) {
+      this.logger(err);
+      throw new Error(`Could not read file: ${filename}`, {cause: err});
+    }
+  }
+
   storeTraceRecording(result: TraceResult): void {
     this.#traceResults.push(result);
   }

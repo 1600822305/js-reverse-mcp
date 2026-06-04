@@ -348,7 +348,9 @@ in the DevTools Elements panel (if any).
 - **requestBodyContains** (string) _(optional)_: Extra match: the request body must contain this substring (case-insensitive).
 - **requestHeaderContains** (object) _(optional)_: Extra match: each named request header must contain the substring (case-insensitive), e.g. {"authorization":"Bearer"}.
 - **resourceTypes** (array) _(optional)_: CDP resource types to match (e.g. ["XHR","Fetch"]). Empty = any.
-- **responseBody** (string) _(optional)_: Response body (mock, or modifyResponse to fully replace the body).
+- **responseBody** (string) _(optional)_: Response body as UTF-8 text (mock, or modifyResponse to fully replace the body).
+- **responseBodyBase64** (string) _(optional)_: Response body as base64 (mock/modifyResponse). Use for binary payloads (images, protobuf, fonts). Takes precedence over responseBody.
+- **responseBodyFile** (string) _(optional)_: Path to a local file whose bytes become the response body (mock/modifyResponse). Read as binary; takes precedence over responseBody and responseBodyBase64.
 - **responseHeaderContains** (object) _(optional)_: Extra match: each named response header must contain the substring (Response stage only).
 - **responseHeaders** (object) _(optional)_: Response headers (mock/modifyResponse).
 - **responseStatus** (integer) _(optional)_: Response status code (mock/modifyResponse).

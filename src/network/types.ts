@@ -105,6 +105,13 @@ export interface NetworkRule {
   responseStatus?: number;
   responseHeaders?: Record<string, string>;
   responseBody?: string;
+  /**
+   * Base64-encoded response body for mock/modifyResponse. Takes precedence over
+   * `responseBody` and preserves binary payloads (images, protobuf, fonts). The
+   * `add_network_rule` tool populates this from `responseBodyBase64` or by
+   * reading `responseBodyFile`.
+   */
+  responseBodyBase64?: string;
   /** Delay applied before fulfilling a mock/modifyResponse, in milliseconds. */
   delayMs?: number;
   // ----- block -----
