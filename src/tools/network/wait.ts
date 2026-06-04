@@ -54,6 +54,7 @@ export const waitForRequest = defineTool({
     title: 'Wait For Request',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
+    skipDevToolsDetection: true,
   },
   schema: waitSchema,
   handler: async (request, response, context) => {
@@ -92,6 +93,7 @@ export const waitForResponse = defineTool({
     title: 'Wait For Response',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
+    skipDevToolsDetection: true,
   },
   schema: {
     ...waitSchema,

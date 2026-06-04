@@ -477,10 +477,18 @@ export class McpContext implements Context {
       if (devToolsPage.url().startsWith('devtools://')) {
         try {
           this.logger('Calling getTargetInfo for ' + devToolsPage.url());
-          const data = await devToolsPage
-            // @ts-expect-error no types for _client().
-            ._client()
-            .send('Target.getTargetInfo');
+          const data = await Promise.race([
+            devToolsPage
+              // @ts-expect-error no types for _client().
+              ._client()
+              .send('Target.getTargetInfo'),
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () => reject(new Error('getTargetInfo timed out')),
+                2000,
+              ),
+            ),
+          ]);
           const devtoolsPageTitle = data.targetInfo.title;
           const urlLike = extractUrlLikeFromDevToolsTitle(devtoolsPageTitle);
           if (!urlLike) {

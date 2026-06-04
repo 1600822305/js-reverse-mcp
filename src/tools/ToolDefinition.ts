@@ -27,6 +27,13 @@ export interface ToolDefinition<
      * If true, the tool does not modify its environment.
      */
     readOnlyHint: boolean;
+    /**
+     * If true, skip the `detectOpenDevToolsWindows()` call before this tool
+     * runs. Use for tools that only read in-memory stores (network capture,
+     * WebSocket/SSE trackers, token store) and never need page/DevTools
+     * context, avoiding unnecessary CDP round-trips.
+     */
+    skipDevToolsDetection?: boolean;
   };
   schema: Schema;
   handler: (

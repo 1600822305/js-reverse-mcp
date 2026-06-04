@@ -61,6 +61,7 @@ export const listEventsourceMessages = defineTool({
     title: 'List EventSource Messages',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
+    skipDevToolsDetection: true,
   },
   schema: {
     urlPattern: zod

@@ -121,6 +121,8 @@ export const setNetworkConditions = defineTool({
     };
 
     await client.send('Network.emulateNetworkConditions', profile);
+    // Track the preset so McpContext can adjust navigation timeouts accordingly.
+    context.setNetworkConditions(params.preset ?? null);
     response.appendResponseLine(
       `Network conditions set: offline=${profile.offline}, latency=${profile.latency}ms, down=${profile.downloadThroughput}B/s, up=${profile.uploadThroughput}B/s`,
     );
@@ -196,6 +198,7 @@ export const clearNetworkConditions = defineTool({
       downloadThroughput: -1,
       uploadThroughput: -1,
     });
+    context.setNetworkConditions(null);
     await client.send('Network.setExtraHTTPHeaders', {headers: {}});
     try {
       await client.send('Network.setUserAgentOverride', {userAgent: ''});

@@ -35,7 +35,6 @@ const FILTERABLE_MESSAGE_TYPES: [
   'count',
   'timeEnd',
   'verbose',
-  'issue',
 ];
 
 if (features.issues) {

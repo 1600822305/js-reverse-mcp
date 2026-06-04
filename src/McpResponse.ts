@@ -222,7 +222,7 @@ export class McpResponse implements Response {
         const mappedIssueMessage = mapIssueToMessageObject(message);
         if (!mappedIssueMessage)
           throw new Error(
-            "Can't prpovide detals for the msgid " + consoleMessageStableId,
+            "Can't provide details for the msgid " + consoleMessageStableId,
           );
         consoleData = {
           consoleMessageStableId,
