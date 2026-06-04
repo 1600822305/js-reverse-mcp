@@ -59,6 +59,27 @@ export const addNetworkRule = defineTool({
       .describe(
         'CDP resource types to match (e.g. ["XHR","Fetch"]). Empty = any.',
       ),
+    requestHeaderContains: zod
+      .record(zod.string())
+      .optional()
+      .describe(
+        'Extra match: each named request header must contain the substring ' +
+          '(case-insensitive), e.g. {"authorization":"Bearer"}.',
+      ),
+    requestBodyContains: zod
+      .string()
+      .optional()
+      .describe(
+        'Extra match: the request body must contain this substring ' +
+          '(case-insensitive).',
+      ),
+    responseHeaderContains: zod
+      .record(zod.string())
+      .optional()
+      .describe(
+        'Extra match: each named response header must contain the substring ' +
+          '(Response stage only).',
+      ),
     setUrl: zod
       .string()
       .optional()
@@ -134,6 +155,9 @@ export const addNetworkRule = defineTool({
       isRegex: params.isRegex ?? false,
       methods: params.methods?.map(m => m.toUpperCase()),
       resourceTypes: params.resourceTypes,
+      requestHeaderContains: params.requestHeaderContains,
+      requestBodyContains: params.requestBodyContains,
+      responseHeaderContains: params.responseHeaderContains,
       stage,
       action: params.action,
       setUrl: params.setUrl,

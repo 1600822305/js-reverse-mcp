@@ -6,6 +6,7 @@
 
 import {buildHar} from '../../network/har.js';
 import type {CapturedRequest} from '../../network/types.js';
+import type {RequestInitiator} from '../../PageCollector.js';
 import {zod} from '../../third_party/index.js';
 import {ToolCategory} from '../categories.js';
 import {defineTool} from '../ToolDefinition.js';
@@ -15,6 +16,30 @@ function summarize(r: CapturedRequest): string {
     ? `FAILED(${r.errorText ?? 'error'})`
     : (r.status ?? '-');
   return `#${r.id} ${r.method} ${status} ${r.mimeType ?? ''} ${r.url}`;
+}
+
+/** Render the top frames of a request's initiator call stack. */
+function formatInitiator(
+  initiator: RequestInitiator,
+  maxFrames: number,
+): string[] {
+  const lines = [`  initiator: ${initiator.type}`];
+  if (initiator.url) {
+    lines.push(
+      `    at ${initiator.url}:${initiator.lineNumber ?? 0}:${initiator.columnNumber ?? 0}`,
+    );
+  }
+  const frames = initiator.stack?.callFrames ?? [];
+  for (const frame of frames.slice(0, maxFrames)) {
+    const name = frame.functionName || '(anonymous)';
+    lines.push(
+      `    at ${name} (${frame.url}:${frame.lineNumber}:${frame.columnNumber})`,
+    );
+  }
+  if (frames.length > maxFrames) {
+    lines.push(`    ... ${frames.length - maxFrames} more frame(s)`);
+  }
+  return lines;
 }
 
 export const searchNetwork = defineTool({
@@ -58,6 +83,20 @@ export const searchNetwork = defineTool({
       .optional()
       .default(2000)
       .describe('Maximum body characters to display (default 2000).'),
+    includeInitiator: zod
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        'Include the JS initiator call stack for each result (main-page ' +
+          'requests only). Useful to locate the code that fired a request.',
+      ),
+    maxFrames: zod
+      .number()
+      .int()
+      .optional()
+      .default(5)
+      .describe('Maximum initiator call-stack frames to show (default 5).'),
     limit: zod
       .number()
       .int()
@@ -111,6 +150,18 @@ export const searchNetwork = defineTool({
     response.appendResponseLine(`Matched ${results.length} request(s):`);
     for (const r of results) {
       response.appendResponseLine(summarize(r));
+      if (params.includeInitiator) {
+        const reqid = context.resolveCdpRequestId(r.cdpRequestId);
+        const initiator =
+          reqid !== undefined
+            ? context.getRequestInitiatorById(reqid)
+            : undefined;
+        if (initiator) {
+          for (const line of formatInitiator(initiator, params.maxFrames)) {
+            response.appendResponseLine(line);
+          }
+        }
+      }
       if (params.includeBodies) {
         const body = await store.getResponseBody(r.id);
         if (body) {
@@ -227,6 +278,9 @@ export const exportHar = defineTool({
     const bodies = new Map<number, string>();
     if (params.includeBodies) {
       for (const r of records) {
+        // Pull full request bodies that CDP omitted from the live event so the
+        // HAR `postData` is complete.
+        await store.getRequestBody(r.id);
         const body = await store.getResponseBody(r.id);
         if (body && !body.base64) {
           bodies.set(r.id, body.body);

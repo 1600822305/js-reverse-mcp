@@ -144,6 +144,7 @@ export class RequestStore {
       if (event.request.postData !== undefined) {
         existing.requestBody = event.request.postData;
       }
+      existing.hasPostData = event.request.hasPostData ?? existing.hasPostData;
       this.#notify(existing, 'request');
       return;
     }
@@ -155,6 +156,7 @@ export class RequestStore {
       resourceType: event.type,
       requestHeaders: {...event.request.headers},
       requestBody: event.request.postData,
+      hasPostData: event.request.hasPostData,
       startTime: event.wallTime ? event.wallTime * 1000 : Date.now(),
       finished: false,
     };
@@ -369,5 +371,37 @@ export class RequestStore {
       const waiter: Waiter = {phase: opts.phase, match, resolve: finish};
       this.#waiters.add(waiter);
     });
+  }
+
+  /**
+   * Return the request body, lazily fetching it via
+   * `Network.getRequestPostData` when CDP omitted it from the
+   * `requestWillBeSent` event (large POST bodies are not inlined). The fetched
+   * value is cached back onto the record.
+   */
+  async getRequestBody(id: number): Promise<string | undefined> {
+    const record = this.getById(id);
+    if (!record) {
+      return undefined;
+    }
+    if (record.requestBody !== undefined) {
+      return record.requestBody;
+    }
+    if (!record.hasPostData) {
+      return undefined;
+    }
+    const client = this.#idToSession.get(id);
+    if (!client) {
+      return undefined;
+    }
+    try {
+      const result = await client.send('Network.getRequestPostData', {
+        requestId: record.cdpRequestId,
+      });
+      record.requestBody = result.postData;
+      return result.postData;
+    } catch {
+      return undefined;
+    }
   }
 }

@@ -23,6 +23,37 @@ function headerArrayToRecord(
   return out;
 }
 
+/** Case-insensitive header lookup. */
+function findHeader(
+  headers: Record<string, string>,
+  name: string,
+): string | undefined {
+  const lower = name.toLowerCase();
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === lower) {
+      return v;
+    }
+  }
+  return undefined;
+}
+
+/** Every named header must exist and contain the expected substring. */
+function headersContain(
+  headers: Record<string, string>,
+  conditions: Record<string, string>,
+): boolean {
+  for (const [name, expected] of Object.entries(conditions)) {
+    const actual = findHeader(headers, name);
+    if (
+      actual === undefined ||
+      !actual.toLowerCase().includes(expected.toLowerCase())
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Owns a single `Fetch.requestPaused` handler and a registry of interception
  * rules. This replaces the old `intercept_requests` design which:
@@ -143,10 +174,11 @@ export class InterceptRegistry {
 
   #matchRule(
     stage: RuleStage,
-    url: string,
-    method: string,
-    resourceType: string,
+    event: Protocol.Fetch.RequestPausedEvent,
   ): NetworkRule | undefined {
+    const {request, resourceType} = event;
+    const reqHeaders = request.headers;
+    const respHeaders = headerArrayToRecord(event.responseHeaders);
     for (const rule of this.#rules.values()) {
       // `continue` rules are observe-only: they emit no Fetch pattern and must
       // not shadow a real action rule that caused this pause.
@@ -156,13 +188,13 @@ export class InterceptRegistry {
       if (rule.stage !== stage) {
         continue;
       }
-      if (!matchUrl(url, rule.urlPattern, rule.isRegex)) {
+      if (!matchUrl(request.url, rule.urlPattern, rule.isRegex)) {
         continue;
       }
       if (
         rule.methods &&
         rule.methods.length > 0 &&
-        !rule.methods.includes(method.toUpperCase())
+        !rule.methods.includes(request.method.toUpperCase())
       ) {
         continue;
       }
@@ -170,6 +202,26 @@ export class InterceptRegistry {
         rule.resourceTypes &&
         rule.resourceTypes.length > 0 &&
         !rule.resourceTypes.includes(resourceType)
+      ) {
+        continue;
+      }
+      if (
+        rule.requestHeaderContains &&
+        !headersContain(reqHeaders, rule.requestHeaderContains)
+      ) {
+        continue;
+      }
+      if (rule.requestBodyContains !== undefined) {
+        const body = request.postData ?? '';
+        if (
+          !body.toLowerCase().includes(rule.requestBodyContains.toLowerCase())
+        ) {
+          continue;
+        }
+      }
+      if (
+        rule.responseHeaderContains &&
+        !headersContain(respHeaders, rule.responseHeaderContains)
       ) {
         continue;
       }
@@ -182,7 +234,7 @@ export class InterceptRegistry {
     client: CDPSession,
     event: Protocol.Fetch.RequestPausedEvent,
   ): Promise<void> => {
-    const {requestId, request, resourceType} = event;
+    const {requestId, request} = event;
     const isResponseStage =
       event.responseStatusCode !== undefined ||
       event.responseErrorReason !== undefined;
@@ -200,12 +252,7 @@ export class InterceptRegistry {
       }
     };
 
-    const rule = this.#matchRule(
-      stage,
-      request.url,
-      request.method,
-      resourceType,
-    );
+    const rule = this.#matchRule(stage, event);
     if (!rule) {
       await passThrough();
       return;
