@@ -113,7 +113,22 @@ export const addNetworkRule = defineTool({
       .string()
       .optional()
       .describe(
-        'Response body (mock, or modifyResponse to fully replace the body).',
+        'Response body as UTF-8 text (mock, or modifyResponse to fully replace the body).',
+      ),
+    responseBodyBase64: zod
+      .string()
+      .optional()
+      .describe(
+        'Response body as base64 (mock/modifyResponse). Use for binary payloads ' +
+          '(images, protobuf, fonts). Takes precedence over responseBody.',
+      ),
+    responseBodyFile: zod
+      .string()
+      .optional()
+      .describe(
+        'Path to a local file whose bytes become the response body ' +
+          '(mock/modifyResponse). Read as binary; takes precedence over ' +
+          'responseBody and responseBodyBase64.',
       ),
     delayMs: zod
       .number()
@@ -149,6 +164,23 @@ export const addNetworkRule = defineTool({
       (params.action === 'modifyResponse' ? 'Response' : 'Request');
     const id = params.ruleId || `rule_${Date.now()}_${++ruleCounter}`;
 
+    // Resolve the response body: a file (read as binary) beats an explicit
+    // base64 string, which beats the UTF-8 text body.
+    let responseBodyBase64 = params.responseBodyBase64;
+    if (params.responseBodyFile) {
+      try {
+        const bytes = await context.loadFile(params.responseBodyFile);
+        responseBodyBase64 = Buffer.from(bytes).toString('base64');
+      } catch (err) {
+        response.appendResponseLine(
+          `Could not read responseBodyFile "${params.responseBodyFile}": ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        return;
+      }
+    }
+
     const rule: NetworkRule = {
       id,
       urlPattern: params.urlPattern,
@@ -168,6 +200,7 @@ export const addNetworkRule = defineTool({
       responseStatus: params.responseStatus,
       responseHeaders: params.responseHeaders,
       responseBody: params.responseBody,
+      responseBodyBase64,
       delayMs: params.delayMs,
       failReason: params.failReason as Protocol.Network.ErrorReason | undefined,
       stats: {matched: 0, modified: 0, blocked: 0, mocked: 0},

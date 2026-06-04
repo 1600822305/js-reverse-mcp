@@ -284,7 +284,9 @@ export class InterceptRegistry {
             requestId,
             responseCode: rule.responseStatus ?? 200,
             responseHeaders: recordToHeaderEntries(headers),
-            body: Buffer.from(rule.responseBody ?? '').toString('base64'),
+            body:
+              rule.responseBodyBase64 ??
+              Buffer.from(rule.responseBody ?? '').toString('base64'),
           });
           rule.stats.mocked++;
           break;
@@ -318,7 +320,9 @@ export class InterceptRegistry {
           // preserving binary payloads (images, protobuf) instead of mangling
           // them through a UTF-8 round-trip.
           let bodyBase64: string;
-          if (rule.responseBody !== undefined) {
+          if (rule.responseBodyBase64 !== undefined) {
+            bodyBase64 = rule.responseBodyBase64;
+          } else if (rule.responseBody !== undefined) {
             bodyBase64 = Buffer.from(rule.responseBody).toString('base64');
           } else {
             try {

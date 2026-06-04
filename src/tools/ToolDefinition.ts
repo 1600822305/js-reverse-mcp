@@ -114,6 +114,7 @@ export type Context = Readonly<{
     data: Uint8Array<ArrayBufferLike>,
     filename: string,
   ): Promise<{filename: string}>;
+  loadFile(filename: string): Promise<Uint8Array>;
   waitForEventsAfterAction(action: () => Promise<unknown>): Promise<void>;
   waitForTextOnPage(params: {
     text: string;
