@@ -23,55 +23,66 @@
   - [`list_console_messages`](#list_console_messages)
   - [`take_screenshot`](#take_screenshot)
   - [`take_snapshot`](#take_snapshot)
-- **[JS Reverse Engineering](#js-reverse-engineering)** (55 tools)
+- **[JS Reverse Engineering](#js-reverse-engineering)** (66 tools)
+  - [`add_network_rule`](#add_network_rule)
   - [`analyze_encoded_string`](#analyze_encoded_string)
   - [`beautify_script`](#beautify_script)
   - [`break_on_attribute_modified`](#break_on_attribute_modified)
   - [`break_on_node_removed`](#break_on_node_removed)
   - [`break_on_subtree_modified`](#break_on_subtree_modified)
   - [`break_on_xhr`](#break_on_xhr)
+  - [`clear_network_conditions`](#clear_network_conditions)
   - [`decode_protobuf`](#decode_protobuf)
   - [`deobfuscate`](#deobfuscate)
   - [`detect_encryption`](#detect_encryption)
   - [`diff_globals`](#diff_globals)
   - [`encode_protobuf`](#encode_protobuf)
   - [`evaluate_on_callframe`](#evaluate_on_callframe)
+  - [`export_har`](#export_har)
   - [`find_in_script`](#find_in_script)
   - [`get_paused_info`](#get_paused_info)
   - [`get_request_initiator`](#get_request_initiator)
+  - [`get_response_body`](#get_response_body)
   - [`get_script_source`](#get_script_source)
   - [`get_storage`](#get_storage)
   - [`hook_crypto_functions`](#hook_crypto_functions)
   - [`hook_function`](#hook_function)
   - [`inspect_object`](#inspect_object)
-  - [`intercept_requests`](#intercept_requests)
   - [`list_breakpoints`](#list_breakpoints)
+  - [`list_eventsource_messages`](#list_eventsource_messages)
   - [`list_globals`](#list_globals)
   - [`list_hooks`](#list_hooks)
-  - [`list_interceptors`](#list_interceptors)
+  - [`list_network_rules`](#list_network_rules)
   - [`list_scripts`](#list_scripts)
   - [`list_watchers`](#list_watchers)
   - [`list_websocket_connections`](#list_websocket_connections)
+  - [`list_websocket_messages`](#list_websocket_messages)
   - [`monitor_events`](#monitor_events)
+  - [`monitor_eventsource`](#monitor_eventsource)
   - [`monitor_form_submit`](#monitor_form_submit)
   - [`monitor_input_changes`](#monitor_input_changes)
   - [`monitor_websocket`](#monitor_websocket)
   - [`pause`](#pause)
   - [`remove_breakpoint`](#remove_breakpoint)
   - [`remove_dom_breakpoint`](#remove_dom_breakpoint)
+  - [`remove_network_rule`](#remove_network_rule)
   - [`remove_xhr_breakpoint`](#remove_xhr_breakpoint)
+  - [`replay_request`](#replay_request)
   - [`resume`](#resume)
   - [`search_in_sources`](#search_in_sources)
+  - [`search_network`](#search_network)
   - [`set_breakpoint`](#set_breakpoint)
   - [`set_breakpoint_on_text`](#set_breakpoint_on_text)
+  - [`set_extra_headers`](#set_extra_headers)
+  - [`set_network_conditions`](#set_network_conditions)
   - [`snapshot_globals`](#snapshot_globals)
   - [`start_js_coverage`](#start_js_coverage)
   - [`step_into`](#step_into)
   - [`step_out`](#step_out)
   - [`step_over`](#step_over)
+  - [`stop_eventsource_monitor`](#stop_eventsource_monitor)
   - [`stop_form_monitor`](#stop_form_monitor)
   - [`stop_input_monitor`](#stop_input_monitor)
-  - [`stop_interceptor`](#stop_interceptor)
   - [`stop_js_coverage`](#stop_js_coverage)
   - [`stop_monitor`](#stop_monitor)
   - [`stop_websocket_monitor`](#stop_websocket_monitor)
@@ -313,6 +324,32 @@ in the DevTools Elements panel (if any).
 
 ## JS Reverse Engineering
 
+### `add_network_rule`
+
+**Description:** Adds a network interception rule (replaces the old intercept_requests). Rules are evaluated by a single shared Fetch handler, so multiple rules coexist without clobbering each other. Supports both the Request and Response stages, so you can inspect/rewrite real response bodies — not just mock or modify outgoing requests.
+
+**Parameters:**
+
+- **action** (enum: "continue", "modifyRequest", "modifyResponse", "mock", "block") **(required)**: continue (just observe), modifyRequest, modifyResponse, mock (fulfill without hitting server), block.
+- **delayMs** (integer) _(optional)_: Delay before fulfilling, in milliseconds (mock/modifyResponse).
+- **failReason** (string) _(optional)_: CDP error reason for block action (default BlockedByClient), e.g. AccessDenied, ConnectionRefused, TimedOut.
+- **isRegex** (boolean) _(optional)_: Treat urlPattern as a JavaScript regular expression.
+- **methods** (array) _(optional)_: HTTP methods to match (e.g. ["GET","POST"]). Empty = any.
+- **removeHeaders** (array) _(optional)_: Header names to remove (modifyRequest/modifyResponse).
+- **resourceTypes** (array) _(optional)_: CDP resource types to match (e.g. ["XHR","Fetch"]). Empty = any.
+- **responseBody** (string) _(optional)_: Response body (mock, or modifyResponse to fully replace the body).
+- **responseHeaders** (object) _(optional)_: Response headers (mock/modifyResponse).
+- **responseStatus** (integer) _(optional)_: Response status code (mock/modifyResponse).
+- **ruleId** (string) _(optional)_: Custom rule id. Auto-generated when omitted.
+- **setHeaders** (object) _(optional)_: Headers to add/override (modifyRequest/modifyResponse).
+- **setMethod** (string) _(optional)_: Override the HTTP method (modifyRequest).
+- **setRequestBody** (string) _(optional)_: Replacement request body (modifyRequest).
+- **setUrl** (string) _(optional)_: Redirect the request to this URL (modifyRequest).
+- **stage** (enum: "Request", "Response") _(optional)_: Interception stage. Defaults to Response for modifyResponse, otherwise Request.
+- **urlPattern** (string) **(required)**: URL matcher. Glob with _ by default; substring match when no _ is present; JS regex when isRegex=true.
+
+---
+
 ### `analyze_encoded_string`
 
 **Description:** Analyzes a string to detect its encoding type (Base64, Hex, JWT, URL encoding, etc.) and attempts to decode it.
@@ -374,6 +411,14 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **url** (string) **(required)**: URL pattern to break on (partial match).
+
+---
+
+### `clear_network_conditions`
+
+**Description:** Resets network emulation (back online, no throttling) and clears any User-Agent override and extra headers.
+
+**Parameters:** None
 
 ---
 
@@ -458,6 +503,20 @@ in the DevTools Elements panel (if any).
 
 ---
 
+### `export_har`
+
+**Description:** Exports captured network traffic as a HAR 1.2 file (optionally filtered and including response bodies).
+
+**Parameters:**
+
+- **filePath** (string) _(optional)_: Filename to save the HAR as. Defaults to capture.har.
+- **includeBodies** (boolean) _(optional)_: Fetch and embed response bodies (default true).
+- **isRegex** (boolean) _(optional)_
+- **limit** (integer) _(optional)_: Maximum number of requests to export (default 1000).
+- **urlPattern** (string) _(optional)_: Only include requests matching this URL pattern.
+
+---
+
 ### `find_in_script`
 
 **Description:** Finds a string in a specific script and returns its exact line/column position with surrounding context. Ideal for setting breakpoints in minified files where the entire code is on one line.
@@ -490,6 +549,17 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **requestId** (integer) **(required)**: The request ID (from [`list_network_requests`](#list_network_requests)) to get the initiator for.
+
+---
+
+### `get_response_body`
+
+**Description:** Fetches the full response body of a captured request by its numeric id (from [`search_network`](#search_network)). Binary bodies are returned as base64.
+
+**Parameters:**
+
+- **maxLength** (integer) _(optional)_: Maximum characters to return (default 20000, 0 = unlimited).
+- **requestId** (integer) **(required)**: Numeric request id from [`search_network`](#search_network).
 
 ---
 
@@ -555,27 +625,25 @@ in the DevTools Elements panel (if any).
 
 ---
 
-### `intercept_requests`
-
-**Description:** Starts intercepting network requests. Allows logging, modifying requests before they are sent, blocking them, or returning mock responses (with optional response delay).
-
-**Parameters:**
-
-- **action** (enum: "log", "modify", "block", "mock") **(required)**: Action to take: log (just log), modify (modify request), block (block request), mock (return mock response).
-- **delay** (integer) _(optional)_: Response delay in milliseconds before returning the mock response (for mock action). Default: 0.
-- **interceptId** (string) _(optional)_: Custom ID for this interceptor.
-- **mockResponse** (object) _(optional)_: Mock response to return (for mock action).
-- **modifyBody** (string) _(optional)_: New request body (for modify action).
-- **modifyHeaders** (object) _(optional)_: Headers to add/modify (for modify action). Use null value to remove a header.
-- **urlPattern** (string) **(required)**: URL pattern to intercept (supports \* wildcard).
-
----
-
 ### `list_breakpoints`
 
 **Description:** Lists all active breakpoints in the current debugging session.
 
 **Parameters:** None
+
+---
+
+### `list_eventsource_messages`
+
+**Description:** Lists captured Server-Sent Events, filterable by URL/content.
+
+**Parameters:**
+
+- **contains** (string) _(optional)_: Only messages whose data contains this text.
+- **isRegex** (boolean) _(optional)_
+- **limit** (integer) _(optional)_: Maximum number of messages (default 100).
+- **maxDataLength** (integer) _(optional)_: Maximum data characters to display (default 2000).
+- **urlPattern** (string) _(optional)_: Filter by source URL (glob/substring/regex).
 
 ---
 
@@ -600,9 +668,9 @@ in the DevTools Elements panel (if any).
 
 ---
 
-### `list_interceptors`
+### `list_network_rules`
 
-**Description:** Lists all active request interceptors and their stats.
+**Description:** Lists active network interception rules and their hit stats.
 
 **Parameters:** None
 
@@ -628,9 +696,25 @@ in the DevTools Elements panel (if any).
 
 ### `list_websocket_connections`
 
-**Description:** Lists all tracked WebSocket connections from active monitors.
+**Description:** Lists tracked WebSocket connections and their frame counts.
 
 **Parameters:** None
+
+---
+
+### `list_websocket_messages`
+
+**Description:** Lists captured WebSocket frames, filterable by connection, direction, URL pattern and payload content. Binary frames are shown as base64.
+
+**Parameters:**
+
+- **connectionId** (integer) _(optional)_: Filter by connection id (from [`list_websocket_connections`](#list_websocket_connections)).
+- **contains** (string) _(optional)_: Only frames whose payload contains this text.
+- **direction** (enum: "sent", "received") _(optional)_: Filter by frame direction.
+- **isRegex** (boolean) _(optional)_
+- **limit** (integer) _(optional)_: Maximum number of frames (default 100).
+- **maxPayloadLength** (integer) _(optional)_: Maximum payload characters to display (default 2000).
+- **urlPattern** (string) _(optional)_: Filter by connection URL (glob/substring/regex).
 
 ---
 
@@ -643,6 +727,16 @@ in the DevTools Elements panel (if any).
 - **events** (array) _(optional)_: Specific events to monitor (e.g., ["click", "keydown"]). If not specified, monitors common events.
 - **monitorId** (string) _(optional)_: Custom ID for this monitor. Used to stop monitoring later.
 - **selector** (string) _(optional)_: CSS selector for element to monitor, or "window"/"document" (default: window).
+
+---
+
+### `monitor_eventsource`
+
+**Description:** Starts capturing Server-Sent Events (EventSource) messages via CDP. Useful for streaming APIs (e.g. LLM token streams, live feeds).
+
+**Parameters:**
+
+- **clear** (boolean) _(optional)_: Clear previously captured messages first.
 
 ---
 
@@ -672,15 +766,11 @@ in the DevTools Elements panel (if any).
 
 ### `monitor_websocket`
 
-**Description:** Starts monitoring WebSocket connections to capture sent and received messages. Messages are logged to console.
+**Description:** Starts capturing WebSocket frames via the CDP Network domain. Unlike a JS monkey-patch, this captures connections opened before the call and after navigation, records binary frames (as base64), and is not detectable from page scripts.
 
 **Parameters:**
 
-- **logReceived** (boolean) _(optional)_: Whether to log received messages (default: true).
-- **logSent** (boolean) _(optional)_: Whether to log sent messages (default: true).
-- **maxMessageLength** (integer) _(optional)_: Maximum message length to log (default: 1000). Set to 0 for unlimited.
-- **monitorId** (string) _(optional)_: Custom ID for this monitor (default: ws_monitor).
-- **urlFilter** (string) _(optional)_: Optional URL pattern to filter WebSocket connections (partial match).
+- **clear** (boolean) _(optional)_: Clear previously captured frames/connections first.
 
 ---
 
@@ -713,6 +803,17 @@ in the DevTools Elements panel (if any).
 
 ---
 
+### `remove_network_rule`
+
+**Description:** Removes a network interception rule by id. Fetch interception is disabled automatically once the last rule is removed.
+
+**Parameters:**
+
+- **all** (boolean) _(optional)_: Remove all rules.
+- **ruleId** (string) _(optional)_: Rule id to remove. Omit with all=true to remove every rule.
+
+---
+
 ### `remove_xhr_breakpoint`
 
 **Description:** Removes an XHR/Fetch breakpoint.
@@ -720,6 +821,21 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **url** (string) **(required)**: The URL pattern to remove breakpoint for.
+
+---
+
+### `replay_request`
+
+**Description:** Re-sends a captured request (by numeric id from [`search_network`](#search_network)) from the page context using fetch(), so cookies and auth are included. Supports overriding the URL, method, headers and body — useful for probing how a signed/parameterised API responds to tampered input.
+
+**Parameters:**
+
+- **maxResponseLength** (integer) _(optional)_: Maximum response body characters to return (default 5000).
+- **overrideBody** (string) _(optional)_: Override the request body.
+- **overrideMethod** (string) _(optional)_: Override the HTTP method.
+- **overrideUrl** (string) _(optional)_: Override the request URL.
+- **requestId** (integer) **(required)**: Numeric request id from [`search_network`](#search_network).
+- **setHeaders** (object) _(optional)_: Headers to add/override on the replayed request.
 
 ---
 
@@ -747,6 +863,24 @@ in the DevTools Elements panel (if any).
 
 ---
 
+### `search_network`
+
+**Description:** Searches captured network requests (CDP-backed store that survives navigation) by URL pattern, method, status and resource type, with an optional full-text search across request/response bodies. Independent of the DevTools UI selection.
+
+**Parameters:**
+
+- **bodyContains** (string) _(optional)_: Only return requests whose request or response body contains this text. Fetches response bodies for candidates.
+- **includeBodies** (boolean) _(optional)_: Include a truncated response body for each result.
+- **isRegex** (boolean) _(optional)_
+- **limit** (integer) _(optional)_: Maximum number of results (default 50).
+- **maxBodyLength** (integer) _(optional)_: Maximum body characters to display (default 2000).
+- **method** (string) _(optional)_: HTTP method filter.
+- **resourceType** (string) _(optional)_: CDP resource type filter (e.g. XHR, Fetch, Script).
+- **status** (integer) _(optional)_: HTTP status filter.
+- **urlPattern** (string) _(optional)_: URL matcher: glob with \*, substring, or regex (isRegex).
+
+---
+
 ### `set_breakpoint`
 
 **Description:** Sets a breakpoint in a JavaScript file at the specified line. The breakpoint will trigger when the code executes.
@@ -771,6 +905,31 @@ in the DevTools Elements panel (if any).
 - **occurrence** (integer) _(optional)_: Which occurrence to break on (1 = first, 2 = second, etc.).
 - **text** (string) **(required)**: The code text to find and set breakpoint on (e.g., "function myFunc", "fetchData(", "apiCall").
 - **urlFilter** (string) _(optional)_: Only search in scripts whose URL contains this string (case-insensitive).
+
+---
+
+### `set_extra_headers`
+
+**Description:** Sets extra HTTP headers sent with every subsequent request (CDP Network.setExtraHTTPHeaders). Pass an empty object to clear.
+
+**Parameters:**
+
+- **headers** (object) **(required)**: Header name/value map. Empty object clears all extra headers.
+
+---
+
+### `set_network_conditions`
+
+**Description:** Emulates network conditions (offline, throttling, latency) and optionally overrides the User-Agent, via the CDP Network domain. Use a preset or specify raw values.
+
+**Parameters:**
+
+- **downloadThroughput** (number) _(optional)_: Max download throughput in bytes/sec (-1 to disable).
+- **latency** (number) _(optional)_: Minimum round-trip latency in milliseconds.
+- **offline** (boolean) _(optional)_: Force the page offline.
+- **preset** (enum: "No throttling", "Offline", "Slow 3G", "Fast 3G", "Slow 4G", "Fast 4G") _(optional)_: Named throttling profile.
+- **uploadThroughput** (number) _(optional)_: Max upload throughput in bytes/sec (-1 to disable).
+- **userAgent** (string) _(optional)_: Override the User-Agent string for subsequent requests.
 
 ---
 
@@ -820,6 +979,14 @@ in the DevTools Elements panel (if any).
 
 ---
 
+### `stop_eventsource_monitor`
+
+**Description:** Stops capturing EventSource messages. Captured data is retained.
+
+**Parameters:** None
+
+---
+
 ### `stop_form_monitor`
 
 **Description:** Stops monitoring form submissions.
@@ -837,16 +1004,6 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **monitorId** (string) _(optional)_: The monitor ID to stop.
-
----
-
-### `stop_interceptor`
-
-**Description:** Stops a request interceptor.
-
-**Parameters:**
-
-- **interceptId** (string) **(required)**: The interceptor ID to stop.
 
 ---
 
@@ -873,11 +1030,9 @@ in the DevTools Elements panel (if any).
 
 ### `stop_websocket_monitor`
 
-**Description:** Stops a WebSocket monitor and restores original WebSocket.
+**Description:** Stops capturing WebSocket frames. Captured frames are retained.
 
-**Parameters:**
-
-- **monitorId** (string) _(optional)_: The monitor ID to stop (default: ws_monitor).
+**Parameters:** None
 
 ---
 

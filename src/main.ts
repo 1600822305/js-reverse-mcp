@@ -38,13 +38,19 @@ import * as debuggerTools from './tools/debugger.js';
 import * as deobfuscationTools from './tools/deobfuscation.js';
 import * as domTools from './tools/dom.js';
 import * as globalsTools from './tools/globals.js';
+import * as networkCaptureTools from './tools/network/capture.js';
+import * as networkConditionsTools from './tools/network/conditions.js';
+import * as networkEventSourceTools from './tools/network/eventsource.js';
+import * as networkReplayTools from './tools/network/replay.js';
+import * as networkRuleTools from './tools/network/rules.js';
+import * as networkWebsocketTools from './tools/network/websocket.js';
 import * as networkTools from './tools/network.js';
 import * as pagesTools from './tools/pages.js';
+import * as protobufTools from './tools/protobuf.js';
+import * as scrapingTools from './tools/scraping.js';
 import * as screenshotTools from './tools/screenshot.js';
 import * as scriptTools from './tools/script.js';
 import * as snapshotTools from './tools/snapshot.js';
-import * as scrapingTools from './tools/scraping.js';
-import * as protobufTools from './tools/protobuf.js';
 import type {ToolDefinition} from './tools/ToolDefinition.js';
 
 // If moved update release-please config
@@ -57,10 +63,10 @@ export const args = parseArguments(VERSION);
 const logFile = args.logFile ? saveLogsToFile(args.logFile) : undefined;
 
 // Prevent process crashes from unhandled errors
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', reason => {
   logger(`Unhandled rejection: ${reason}`);
 });
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', err => {
   logger(`Uncaught exception: ${err.message}`);
 });
 
@@ -242,6 +248,12 @@ const tools = [
   ...Object.values(domTools),
   ...Object.values(globalsTools),
   ...Object.values(networkTools),
+  ...Object.values(networkCaptureTools),
+  ...Object.values(networkConditionsTools),
+  ...Object.values(networkEventSourceTools),
+  ...Object.values(networkReplayTools),
+  ...Object.values(networkRuleTools),
+  ...Object.values(networkWebsocketTools),
   ...Object.values(pagesTools),
   ...Object.values(screenshotTools),
   ...Object.values(scriptTools),

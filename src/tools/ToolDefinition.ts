@@ -6,6 +6,7 @@
 
 import type {DebuggerContext} from '../DebuggerContext.js';
 import type {TextSnapshotNode} from '../McpContext.js';
+import type {NetworkManager} from '../network/NetworkManager.js';
 import type {RequestInitiator} from '../PageCollector.js';
 import {zod} from '../third_party/index.js';
 import type {
@@ -131,6 +132,10 @@ export type Context = Readonly<{
    * Get the debugger context for script/breakpoint management.
    */
   debuggerContext: DebuggerContext;
+  /**
+   * CDP-native network tooling (capture store, interception, websockets).
+   */
+  networkManager: NetworkManager;
   /**
    * Get the initiator (call stack) for a network request.
    */
