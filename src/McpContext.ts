@@ -299,10 +299,6 @@ export class McpContext implements Context {
     await page.close({runBeforeUnload: false});
   }
 
-  getNetworkRequestById(reqid: number): HTTPRequest {
-    return this.#networkCollector.getById(this.getSelectedPage(), reqid);
-  }
-
   setNetworkConditions(conditions: string | null): void {
     const page = this.getSelectedPage();
     if (conditions === null) {
@@ -685,14 +681,6 @@ export class McpContext implements Context {
 
   getNetworkRequestStableId(request: HTTPRequest): number {
     return this.#networkCollector.getIdForResource(request);
-  }
-
-  /**
-   * Get the initiator (call stack) for a network request.
-   */
-  getRequestInitiator(request: HTTPRequest): RequestInitiator | undefined {
-    const page = this.getSelectedPage();
-    return this.#networkCollector.getInitiator(page, request);
   }
 
   /**

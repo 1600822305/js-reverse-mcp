@@ -155,8 +155,6 @@ claude mcp add js-reverse node /你的路径/js-reverse-mcp/build/src/index.js
 | 工具                         | 描述                                                                                                                         |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `list_network_requests`      | 列出页面所有网络请求（基于 DevTools 面板）                                                                                   |
-| `get_network_request`        | 获取请求详情和响应内容                                                                                                       |
-| `get_request_initiator`      | 获取网络请求的 JavaScript 调用栈                                                                                             |
 | `break_on_xhr`               | 设置 XHR/Fetch URL 断点                                                                                                      |
 | `remove_xhr_breakpoint`      | 移除 XHR 断点                                                                                                                |
 | `search_network`             | 在 CDP 抓包仓库中按 URL/方法/状态/资源类型检索，支持跨请求/响应体全文搜索（导航后仍保留）                                    |
