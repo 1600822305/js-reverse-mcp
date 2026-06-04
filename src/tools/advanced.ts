@@ -777,7 +777,7 @@ export const listWebsocketConnections = defineTool({
 export const interceptRequests = defineTool({
   name: 'intercept_requests',
   description:
-    'Starts intercepting network requests. Allows modifying requests before they are sent, or providing mock responses.',
+    'Starts intercepting network requests. Allows logging, modifying requests before they are sent, blocking them, or returning mock responses (with optional response delay).',
   annotations: {
     title: 'Intercept Requests',
     category: ToolCategory.REVERSE_ENGINEERING,
@@ -810,6 +810,14 @@ export const interceptRequests = defineTool({
       })
       .optional()
       .describe('Mock response to return (for mock action).'),
+    delay: zod
+      .number()
+      .int()
+      .optional()
+      .default(0)
+      .describe(
+        'Response delay in milliseconds before returning the mock response (for mock action). Default: 0.',
+      ),
     interceptId: zod
       .string()
       .optional()
@@ -831,6 +839,7 @@ export const interceptRequests = defineTool({
       modifyHeaders,
       modifyBody,
       mockResponse,
+      delay,
       interceptId,
     } = request.params;
     const id = interceptId || `intercept_${Date.now()}`;
@@ -967,9 +976,22 @@ export const interceptRequests = defineTool({
               return;
             }
 
-            const responseHeaders = Object.entries(
-              mockResponse.headers || {},
-            ).map(([name, value]) => ({name, value}));
+            // Apply delay if specified
+            if (delay > 0) {
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+
+            // Default to JSON + permissive CORS headers when none are provided.
+            const headers =
+              mockResponse.headers && Object.keys(mockResponse.headers).length
+                ? mockResponse.headers
+                : {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                  };
+            const responseHeaders = Object.entries(headers).map(
+              ([name, value]) => ({name, value}),
+            );
 
             await client.send('Fetch.fulfillRequest', {
               requestId,
@@ -1021,6 +1043,9 @@ export const interceptRequests = defineTool({
         response.appendResponseLine(
           `- Mock Body: ${mockResponse.body.substring(0, 100)}...`,
         );
+        if (delay > 0) {
+          response.appendResponseLine(`- Delay: ${delay}ms`);
+        }
       }
       response.appendResponseLine('');
       response.appendResponseLine(
@@ -1183,146 +1208,6 @@ export const listInterceptors = defineTool({
         );
         response.appendResponseLine('');
       }
-    } catch (error) {
-      response.appendResponseLine(
-        `Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  },
-});
-
-/**
- * Quick mock API response.
- */
-export const mockApiResponse = defineTool({
-  name: 'mock_api_response',
-  description:
-    'Quickly set up a mock response for an API endpoint. Simplified interface for common mocking scenarios.',
-  annotations: {
-    title: 'Mock API Response',
-    category: ToolCategory.REVERSE_ENGINEERING,
-    readOnlyHint: false,
-  },
-  schema: {
-    url: zod
-      .string()
-      .describe(
-        'URL pattern to mock (supports * wildcard). Example: "*/api/user*"',
-      ),
-    response: zod.string().describe('JSON response body to return.'),
-    status: zod
-      .number()
-      .int()
-      .optional()
-      .default(200)
-      .describe('HTTP status code (default: 200).'),
-    delay: zod
-      .number()
-      .int()
-      .optional()
-      .default(0)
-      .describe('Response delay in milliseconds (default: 0).'),
-  },
-  handler: async (request, response, context) => {
-    const {url, response: mockBody, status, delay} = request.params;
-
-    // Validate JSON
-    try {
-      JSON.parse(mockBody);
-    } catch {
-      response.appendResponseLine('Error: response must be valid JSON.');
-      return;
-    }
-
-    const debugger_ = context.debuggerContext;
-
-    if (!debugger_.isEnabled()) {
-      response.appendResponseLine(
-        'Debugger is not enabled. Please select a page first.',
-      );
-      return;
-    }
-
-    const client = debugger_.getClient();
-    if (!client) {
-      response.appendResponseLine('Debugger client not available.');
-      return;
-    }
-
-    const mockId = `mock_${Date.now()}`;
-
-    try {
-      // Enable Fetch domain
-      await client.send('Fetch.enable', {
-        patterns: [
-          {
-            urlPattern: url,
-            requestStage: 'Request',
-          },
-        ],
-      });
-
-      // Set up handler
-      const handleRequest = async (event: {
-        requestId: string;
-        request: {url: string};
-      }) => {
-        const pattern = url.replace(/\*/g, '.*');
-        const regex = new RegExp(pattern);
-
-        if (!regex.test(event.request.url)) {
-          await client.send('Fetch.continueRequest', {
-            requestId: event.requestId,
-          });
-          return;
-        }
-
-        // Apply delay if specified
-        if (delay > 0) {
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-
-        await client.send('Fetch.fulfillRequest', {
-          requestId: event.requestId,
-          responseCode: status,
-          responseHeaders: [
-            {name: 'Content-Type', value: 'application/json'},
-            {name: 'Access-Control-Allow-Origin', value: '*'},
-          ],
-          body: Buffer.from(mockBody).toString('base64'),
-        });
-      };
-
-      client.on('Fetch.requestPaused', handleRequest);
-
-      // Store mock config
-      const page = context.getSelectedPage();
-      await page.evaluate(`
-        window.__mcp_mocks__ = window.__mcp_mocks__ || {};
-        window.__mcp_mocks__[${JSON.stringify(mockId)}] = {
-          url: ${JSON.stringify(url)},
-          status: ${status},
-          body: ${JSON.stringify(mockBody)},
-          delay: ${delay}
-        };
-      `);
-
-      response.appendResponseLine(`✅ API mock set up successfully!`);
-      response.appendResponseLine(`- Mock ID: ${mockId}`);
-      response.appendResponseLine(`- URL Pattern: ${url}`);
-      response.appendResponseLine(`- Status: ${status}`);
-      response.appendResponseLine(`- Delay: ${delay}ms`);
-      response.appendResponseLine('');
-      response.appendResponseLine('Response preview:');
-      response.appendResponseLine('```json');
-      response.appendResponseLine(
-        JSON.stringify(JSON.parse(mockBody), null, 2).substring(0, 500),
-      );
-      response.appendResponseLine('```');
-      response.appendResponseLine('');
-      response.appendResponseLine(
-        'Note: Mock will be active until page reload or stop_interceptor is called.',
-      );
     } catch (error) {
       response.appendResponseLine(
         `Error: ${error instanceof Error ? error.message : String(error)}`,

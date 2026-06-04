@@ -505,7 +505,7 @@ export const extractTextBlocks = defineTool({
 export const extractFormData = defineTool({
   name: 'extract_form_data',
   description:
-    'Extract form structure and current values. Useful for understanding form submissions.',
+    'Extract form structure and current values, including hidden fields. By default returns all matching forms; pass formIndex to inspect a single form. Password values are masked unless maskPasswords is set to false.',
   annotations: {
     title: 'Extract Form Data',
     category: ToolCategory.SCRAPING,
@@ -516,88 +516,107 @@ export const extractFormData = defineTool({
       .string()
       .optional()
       .default('form')
-      .describe('CSS selector for the form (default: "form").'),
+      .describe('CSS selector for the form(s) (default: "form").'),
     formIndex: zod
       .number()
       .int()
       .optional()
-      .default(0)
-      .describe('Index of the form if multiple forms match (default: 0).'),
+      .describe(
+        'Index of a single form to inspect when multiple forms match. When omitted, all matching forms are returned.',
+      ),
+    maskPasswords: zod
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        'Mask password field values as "********" instead of returning the plaintext value (default: true).',
+      ),
   },
   handler: async (request, response, context) => {
-    const {formSelector, formIndex} = request.params;
+    const {formSelector, formIndex, maskPasswords} = request.params;
     const page = context.getSelectedPage();
 
     try {
       const extractCode = `
 (function() {
   const forms = document.querySelectorAll(${JSON.stringify(formSelector)});
-  
+
   if (forms.length === 0) {
-    return { error: 'No forms found matching selector: ${formSelector}' };
+    return { error: 'No forms found matching selector: ' + ${JSON.stringify(formSelector)} };
   }
-  
-  const idx = ${formIndex};
-  if (idx >= forms.length) {
-    return { error: 'Form index ' + idx + ' out of range. Found ' + forms.length + ' forms.' };
+
+  const requestedIndex = ${formIndex === undefined ? 'null' : formIndex};
+  if (requestedIndex !== null && requestedIndex >= forms.length) {
+    return { error: 'Form index ' + requestedIndex + ' out of range. Found ' + forms.length + ' forms.' };
   }
-  
-  const form = forms[idx];
-  const fields = [];
-  
-  // Get all form elements
-  const inputs = form.querySelectorAll('input, select, textarea, button');
-  
-  inputs.forEach((input, i) => {
-    const field = {
-      index: i,
-      tagName: input.tagName.toLowerCase(),
-      type: input.type || null,
-      name: input.name || null,
-      id: input.id || null,
-      value: null,
-      required: input.required || false,
-      disabled: input.disabled || false
-    };
-    
-    // Get value based on element type
-    if (input.tagName === 'SELECT') {
-      const selected = input.querySelector('option:checked');
-      field.value = selected ? selected.value : null;
-      field.options = Array.from(input.querySelectorAll('option')).map(opt => ({
-        value: opt.value,
-        text: opt.textContent?.trim(),
-        selected: opt.selected
-      }));
-    } else if (input.type === 'checkbox' || input.type === 'radio') {
-      field.checked = input.checked;
-      field.value = input.value;
-    } else if (input.type === 'hidden') {
-      field.value = input.value;
-      field.isHidden = true;
-    } else {
-      field.value = input.value || null;
-    }
-    
-    // Get associated label
-    if (input.id) {
-      const label = document.querySelector('label[for="' + input.id + '"]');
-      if (label) {
-        field.label = label.textContent?.trim();
+
+  const maskPasswords = ${maskPasswords};
+
+  function extractForm(form, formIdx) {
+    const fields = [];
+    const inputs = form.querySelectorAll('input, select, textarea, button');
+
+    inputs.forEach((input, i) => {
+      const field = {
+        index: i,
+        tagName: input.tagName.toLowerCase(),
+        type: input.type || null,
+        name: input.name || null,
+        id: input.id || null,
+        value: null,
+        required: input.required || false,
+        disabled: input.disabled || false
+      };
+
+      if (input.tagName === 'SELECT') {
+        const selected = input.querySelector('option:checked');
+        field.value = selected ? selected.value : null;
+        field.options = Array.from(input.querySelectorAll('option')).map(opt => ({
+          value: opt.value,
+          text: opt.textContent ? opt.textContent.trim() : null,
+          selected: opt.selected
+        }));
+      } else if (input.type === 'checkbox' || input.type === 'radio') {
+        field.checked = input.checked;
+        field.value = input.value;
+      } else if (input.type === 'password') {
+        field.value = maskPasswords ? '********' : input.value;
+      } else if (input.type === 'hidden') {
+        field.value = input.value;
+        field.isHidden = true;
+      } else {
+        field.value = input.value || null;
       }
-    }
-    
-    fields.push(field);
-  });
-  
+
+      if (input.id) {
+        const label = document.querySelector('label[for="' + input.id + '"]');
+        if (label) {
+          field.label = label.textContent ? label.textContent.trim() : null;
+        }
+      }
+
+      fields.push(field);
+    });
+
+    return {
+      index: formIdx,
+      id: form.id || null,
+      name: form.name || null,
+      action: form.action || null,
+      method: (form.method || 'get').toUpperCase(),
+      enctype: form.enctype || null,
+      fieldCount: fields.length,
+      fields: fields
+    };
+  }
+
+  const selected = requestedIndex !== null
+    ? [{form: forms[requestedIndex], idx: requestedIndex}]
+    : Array.from(forms).map((form, idx) => ({form, idx}));
+
   return {
     formCount: forms.length,
-    selectedIndex: idx,
-    action: form.action || null,
-    method: form.method || 'get',
-    enctype: form.enctype || null,
-    fieldCount: fields.length,
-    fields: fields
+    forms: selected.map(({form, idx}) => extractForm(form, idx))
   };
 })()
 `;
