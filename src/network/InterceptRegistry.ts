@@ -33,31 +33,46 @@ function headerArrayToRecord(
  *   - never removed handlers on stop (listener leak);
  *   - only supported the Request stage (no response inspection/rewrite).
  */
-export class InterceptRegistry {
-  #client: CDPSession | null = null;
-  #rules = new Map<string, NetworkRule>();
-  #fetchEnabled = false;
+interface InterceptSession {
+  handler: (e: Protocol.Fetch.RequestPausedEvent) => void;
+  fetchEnabled: boolean;
+}
 
-  bind(client: CDPSession): void {
-    this.#client = client;
-    client.on('Fetch.requestPaused', this.#onRequestPaused);
-    // Re-apply existing rules onto the new session (e.g. after a page switch).
+export class InterceptRegistry {
+  #rules = new Map<string, NetworkRule>();
+  #sessions = new Map<CDPSession, InterceptSession>();
+
+  bindSession(client: CDPSession): void {
+    if (this.#sessions.has(client)) {
+      return;
+    }
+    const handler = (e: Protocol.Fetch.RequestPausedEvent): void => {
+      void this.#onRequestPaused(client, e);
+    };
+    this.#sessions.set(client, {handler, fetchEnabled: false});
+    client.on('Fetch.requestPaused', handler);
+    // Apply existing rules onto the new session (e.g. an auto-attached worker).
     if (this.#rules.size > 0) {
-      void this.#applyPatterns();
+      void this.#applyPatternsTo(client);
     }
   }
 
-  unbind(): void {
-    const client = this.#client;
-    if (!client) {
+  unbindSession(client: CDPSession): void {
+    const entry = this.#sessions.get(client);
+    if (!entry) {
       return;
     }
-    client.off('Fetch.requestPaused', this.#onRequestPaused);
-    if (this.#fetchEnabled) {
+    client.off('Fetch.requestPaused', entry.handler);
+    if (entry.fetchEnabled) {
       void client.send('Fetch.disable').catch(() => undefined);
-      this.#fetchEnabled = false;
     }
-    this.#client = null;
+    this.#sessions.delete(client);
+  }
+
+  unbindAll(): void {
+    for (const client of [...this.#sessions.keys()]) {
+      this.unbindSession(client);
+    }
   }
 
   listRules(): NetworkRule[] {
@@ -81,11 +96,7 @@ export class InterceptRegistry {
     return existed;
   }
 
-  async #applyPatterns(): Promise<void> {
-    const client = this.#client;
-    if (!client) {
-      return;
-    }
+  #buildPatterns(): Protocol.Fetch.RequestPattern[] {
     // De-duplicate (urlPattern, stage) pairs across all *active* rules.
     // `continue` rules are observe-only and handled passively by the request
     // store, so they emit no Fetch pattern (avoids interception latency) and
@@ -104,15 +115,30 @@ export class InterceptRegistry {
       seen.add(key);
       patterns.push({urlPattern, requestStage: rule.stage});
     }
+    return patterns;
+  }
+
+  async #applyPatterns(): Promise<void> {
+    await Promise.all(
+      [...this.#sessions.keys()].map(client => this.#applyPatternsTo(client)),
+    );
+  }
+
+  async #applyPatternsTo(client: CDPSession): Promise<void> {
+    const entry = this.#sessions.get(client);
+    if (!entry) {
+      return;
+    }
+    const patterns = this.#buildPatterns();
     if (patterns.length === 0) {
-      if (this.#fetchEnabled) {
+      if (entry.fetchEnabled) {
         await client.send('Fetch.disable').catch(() => undefined);
-        this.#fetchEnabled = false;
+        entry.fetchEnabled = false;
       }
       return;
     }
-    await client.send('Fetch.enable', {patterns});
-    this.#fetchEnabled = true;
+    await client.send('Fetch.enable', {patterns}).catch(() => undefined);
+    entry.fetchEnabled = true;
   }
 
   #matchRule(
@@ -153,12 +179,9 @@ export class InterceptRegistry {
   }
 
   #onRequestPaused = async (
+    client: CDPSession,
     event: Protocol.Fetch.RequestPausedEvent,
   ): Promise<void> => {
-    const client = this.#client;
-    if (!client) {
-      return;
-    }
     const {requestId, request, resourceType} = event;
     const isResponseStage =
       event.responseStatusCode !== undefined ||

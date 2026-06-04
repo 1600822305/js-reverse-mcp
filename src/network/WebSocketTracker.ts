@@ -18,37 +18,68 @@ import type {WsConnection, WsFrame} from './types.js';
  * which was injected after page load (missing early/post-navigation sockets),
  * recorded only the byte length of binary frames, was detectable by anti-debug
  * scripts, and only stored message previews in the console.
+ *
+ * Sockets are aggregated across every bound CDP session (page + auto-attached
+ * workers/iframes). CDP `requestId`s are only unique per session, so
+ * connections are keyed by a composite `sessionKey\0requestId`.
  */
+interface WsSessionHandlers {
+  created: (e: Protocol.Network.WebSocketCreatedEvent) => void;
+  frameSent: (e: Protocol.Network.WebSocketFrameSentEvent) => void;
+  frameReceived: (e: Protocol.Network.WebSocketFrameReceivedEvent) => void;
+  closed: (e: Protocol.Network.WebSocketClosedEvent) => void;
+}
+
 export class WebSocketTracker {
-  #client: CDPSession | null = null;
   #connections = new Map<string, WsConnection>();
   #frames: WsFrame[] = [];
   #nextId = 1;
   #enabled = false;
+  #sessions = new Map<CDPSession, {key: string; handlers: WsSessionHandlers}>();
   readonly #maxFrames: number;
 
   constructor(maxFrames = 5000) {
     this.#maxFrames = maxFrames;
   }
 
-  bind(client: CDPSession): void {
-    this.#client = client;
-    client.on('Network.webSocketCreated', this.#onCreated);
-    client.on('Network.webSocketFrameSent', this.#onFrameSent);
-    client.on('Network.webSocketFrameReceived', this.#onFrameReceived);
-    client.on('Network.webSocketClosed', this.#onClosed);
+  #key(sessionKey: string, requestId: string): string {
+    return `${sessionKey}\u0000${requestId}`;
   }
 
-  unbind(): void {
-    const client = this.#client;
-    if (!client) {
+  bindSession(client: CDPSession, sessionKey: string): void {
+    if (this.#sessions.has(client)) {
       return;
     }
-    client.off('Network.webSocketCreated', this.#onCreated);
-    client.off('Network.webSocketFrameSent', this.#onFrameSent);
-    client.off('Network.webSocketFrameReceived', this.#onFrameReceived);
-    client.off('Network.webSocketClosed', this.#onClosed);
-    this.#client = null;
+    const handlers: WsSessionHandlers = {
+      created: e => this.#onCreated(sessionKey, e),
+      frameSent: e => this.#record(sessionKey, e.requestId, 'sent', e.response),
+      frameReceived: e =>
+        this.#record(sessionKey, e.requestId, 'received', e.response),
+      closed: e => this.#onClosed(sessionKey, e),
+    };
+    this.#sessions.set(client, {key: sessionKey, handlers});
+    client.on('Network.webSocketCreated', handlers.created);
+    client.on('Network.webSocketFrameSent', handlers.frameSent);
+    client.on('Network.webSocketFrameReceived', handlers.frameReceived);
+    client.on('Network.webSocketClosed', handlers.closed);
+  }
+
+  unbindSession(client: CDPSession): void {
+    const entry = this.#sessions.get(client);
+    if (!entry) {
+      return;
+    }
+    client.off('Network.webSocketCreated', entry.handlers.created);
+    client.off('Network.webSocketFrameSent', entry.handlers.frameSent);
+    client.off('Network.webSocketFrameReceived', entry.handlers.frameReceived);
+    client.off('Network.webSocketClosed', entry.handlers.closed);
+    this.#sessions.delete(client);
+  }
+
+  unbindAll(): void {
+    for (const client of [...this.#sessions.keys()]) {
+      this.unbindSession(client);
+    }
   }
 
   /** Whether message capture is active. When false, frames are dropped. */
@@ -65,11 +96,15 @@ export class WebSocketTracker {
     this.#frames = [];
   }
 
-  #onCreated = (event: Protocol.Network.WebSocketCreatedEvent): void => {
-    if (this.#connections.has(event.requestId)) {
+  #onCreated = (
+    sessionKey: string,
+    event: Protocol.Network.WebSocketCreatedEvent,
+  ): void => {
+    const key = this.#key(sessionKey, event.requestId);
+    if (this.#connections.has(key)) {
       return;
     }
-    this.#connections.set(event.requestId, {
+    this.#connections.set(key, {
       id: this.#nextId++,
       cdpRequestId: event.requestId,
       url: event.url,
@@ -81,6 +116,7 @@ export class WebSocketTracker {
   };
 
   #record(
+    sessionKey: string,
     requestId: string,
     direction: 'sent' | 'received',
     frame: Protocol.Network.WebSocketFrame,
@@ -88,7 +124,7 @@ export class WebSocketTracker {
     if (!this.#enabled) {
       return;
     }
-    const conn = this.#connections.get(requestId);
+    const conn = this.#connections.get(this.#key(sessionKey, requestId));
     if (!conn) {
       return;
     }
@@ -114,18 +150,11 @@ export class WebSocketTracker {
     }
   }
 
-  #onFrameSent = (event: Protocol.Network.WebSocketFrameSentEvent): void => {
-    this.#record(event.requestId, 'sent', event.response);
-  };
-
-  #onFrameReceived = (
-    event: Protocol.Network.WebSocketFrameReceivedEvent,
+  #onClosed = (
+    sessionKey: string,
+    event: Protocol.Network.WebSocketClosedEvent,
   ): void => {
-    this.#record(event.requestId, 'received', event.response);
-  };
-
-  #onClosed = (event: Protocol.Network.WebSocketClosedEvent): void => {
-    const conn = this.#connections.get(event.requestId);
+    const conn = this.#connections.get(this.#key(sessionKey, event.requestId));
     if (conn) {
       conn.closed = true;
     }

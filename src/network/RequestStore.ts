@@ -18,17 +18,31 @@ export interface RequestQuery {
   limit?: number;
 }
 
+interface SessionHandlers {
+  requestWillBeSent: (e: Protocol.Network.RequestWillBeSentEvent) => void;
+  responseReceived: (e: Protocol.Network.ResponseReceivedEvent) => void;
+  loadingFinished: (e: Protocol.Network.LoadingFinishedEvent) => void;
+  loadingFailed: (e: Protocol.Network.LoadingFailedEvent) => void;
+}
+
 /**
  * Collects request/response metadata from the CDP `Network` domain into a
  * bounded, queryable store on the Node side. Unlike the puppeteer-backed
  * collector this keeps full request/response bodies retrievable on demand and
  * is not tied to the DevTools UI selection.
+ *
+ * The store aggregates traffic from multiple CDP sessions (the main page plus
+ * auto-attached service workers, dedicated workers and OOPIFs). CDP request ids
+ * are only unique within a session, so records are keyed by a composite
+ * `sessionKey\0requestId` and each record remembers the session that produced
+ * it so response bodies can be fetched from the correct target.
  */
 export class RequestStore {
-  #client: CDPSession | null = null;
-  #byCdpId = new Map<string, CapturedRequest>();
+  #byKey = new Map<string, CapturedRequest>();
   #order: string[] = [];
-  #idToCdpId = new Map<number, string>();
+  #idToKey = new Map<number, string>();
+  #idToSession = new Map<number, CDPSession>();
+  #sessions = new Map<CDPSession, {key: string; handlers: SessionHandlers}>();
   #nextId = 1;
   readonly #maxEntries: number;
 
@@ -36,36 +50,59 @@ export class RequestStore {
     this.#maxEntries = maxEntries;
   }
 
-  bind(client: CDPSession): void {
-    this.#client = client;
-    client.on('Network.requestWillBeSent', this.#onRequestWillBeSent);
-    client.on('Network.responseReceived', this.#onResponseReceived);
-    client.on('Network.loadingFinished', this.#onLoadingFinished);
-    client.on('Network.loadingFailed', this.#onLoadingFailed);
-  }
-
-  unbind(): void {
-    const client = this.#client;
-    if (!client) {
+  bindSession(client: CDPSession, sessionKey: string): void {
+    if (this.#sessions.has(client)) {
       return;
     }
-    client.off('Network.requestWillBeSent', this.#onRequestWillBeSent);
-    client.off('Network.responseReceived', this.#onResponseReceived);
-    client.off('Network.loadingFinished', this.#onLoadingFinished);
-    client.off('Network.loadingFailed', this.#onLoadingFailed);
-    this.#client = null;
+    const handlers: SessionHandlers = {
+      requestWillBeSent: e => this.#onRequestWillBeSent(sessionKey, client, e),
+      responseReceived: e => this.#onResponseReceived(sessionKey, e),
+      loadingFinished: e => this.#onLoadingFinished(sessionKey, e),
+      loadingFailed: e => this.#onLoadingFailed(sessionKey, e),
+    };
+    this.#sessions.set(client, {key: sessionKey, handlers});
+    client.on('Network.requestWillBeSent', handlers.requestWillBeSent);
+    client.on('Network.responseReceived', handlers.responseReceived);
+    client.on('Network.loadingFinished', handlers.loadingFinished);
+    client.on('Network.loadingFailed', handlers.loadingFailed);
+  }
+
+  unbindSession(client: CDPSession): void {
+    const entry = this.#sessions.get(client);
+    if (!entry) {
+      return;
+    }
+    client.off('Network.requestWillBeSent', entry.handlers.requestWillBeSent);
+    client.off('Network.responseReceived', entry.handlers.responseReceived);
+    client.off('Network.loadingFinished', entry.handlers.loadingFinished);
+    client.off('Network.loadingFailed', entry.handlers.loadingFailed);
+    this.#sessions.delete(client);
+  }
+
+  unbindAll(): void {
+    for (const client of [...this.#sessions.keys()]) {
+      this.unbindSession(client);
+    }
   }
 
   clear(): void {
-    this.#byCdpId.clear();
+    this.#byKey.clear();
     this.#order = [];
-    this.#idToCdpId.clear();
+    this.#idToKey.clear();
+    this.#idToSession.clear();
+  }
+
+  #key(sessionKey: string, requestId: string): string {
+    return `${sessionKey}\u0000${requestId}`;
   }
 
   #onRequestWillBeSent = (
+    sessionKey: string,
+    client: CDPSession,
     event: Protocol.Network.RequestWillBeSentEvent,
   ): void => {
-    const existing = this.#byCdpId.get(event.requestId);
+    const key = this.#key(sessionKey, event.requestId);
+    const existing = this.#byKey.get(key);
     if (existing) {
       // CDP reuses the requestId across a redirect chain. Record the hop we are
       // leaving (its URL + 3xx status from redirectResponse) before retargeting.
@@ -96,13 +133,14 @@ export class RequestStore {
       startTime: event.wallTime ? event.wallTime * 1000 : Date.now(),
       finished: false,
     };
-    this.#insert(record);
+    this.#insert(key, record, client);
   };
 
   #onResponseReceived = (
+    sessionKey: string,
     event: Protocol.Network.ResponseReceivedEvent,
   ): void => {
-    const record = this.#byCdpId.get(event.requestId);
+    const record = this.#byKey.get(this.#key(sessionKey, event.requestId));
     if (!record) {
       return;
     }
@@ -112,13 +150,17 @@ export class RequestStore {
     record.mimeType = event.response.mimeType;
     record.remoteIPAddress = event.response.remoteIPAddress;
     record.fromCache = event.response.fromDiskCache;
+    record.timing = event.response.timing ?? undefined;
     if (!record.resourceType) {
       record.resourceType = event.type;
     }
   };
 
-  #onLoadingFinished = (event: Protocol.Network.LoadingFinishedEvent): void => {
-    const record = this.#byCdpId.get(event.requestId);
+  #onLoadingFinished = (
+    sessionKey: string,
+    event: Protocol.Network.LoadingFinishedEvent,
+  ): void => {
+    const record = this.#byKey.get(this.#key(sessionKey, event.requestId));
     if (!record) {
       return;
     }
@@ -127,8 +169,11 @@ export class RequestStore {
     record.encodedDataLength = event.encodedDataLength;
   };
 
-  #onLoadingFailed = (event: Protocol.Network.LoadingFailedEvent): void => {
-    const record = this.#byCdpId.get(event.requestId);
+  #onLoadingFailed = (
+    sessionKey: string,
+    event: Protocol.Network.LoadingFailedEvent,
+  ): void => {
+    const record = this.#byKey.get(this.#key(sessionKey, event.requestId));
     if (!record) {
       return;
     }
@@ -138,35 +183,41 @@ export class RequestStore {
     record.endTime = Date.now();
   };
 
-  #insert(record: CapturedRequest): void {
-    this.#byCdpId.set(record.cdpRequestId, record);
-    this.#idToCdpId.set(record.id, record.cdpRequestId);
-    this.#order.push(record.cdpRequestId);
+  #insert(key: string, record: CapturedRequest, client: CDPSession): void {
+    this.#byKey.set(key, record);
+    this.#idToKey.set(record.id, key);
+    this.#idToSession.set(record.id, client);
+    this.#order.push(key);
     while (this.#order.length > this.#maxEntries) {
       const evicted = this.#order.shift();
       if (evicted !== undefined) {
-        const old = this.#byCdpId.get(evicted);
+        const old = this.#byKey.get(evicted);
         if (old) {
-          this.#idToCdpId.delete(old.id);
+          this.#idToKey.delete(old.id);
+          this.#idToSession.delete(old.id);
         }
-        this.#byCdpId.delete(evicted);
+        this.#byKey.delete(evicted);
       }
     }
   }
 
   getAll(): CapturedRequest[] {
     return this.#order
-      .map(id => this.#byCdpId.get(id))
+      .map(key => this.#byKey.get(key))
       .filter((r): r is CapturedRequest => r !== undefined);
   }
 
   getById(id: number): CapturedRequest | undefined {
-    const cdpId = this.#idToCdpId.get(id);
-    return cdpId ? this.#byCdpId.get(cdpId) : undefined;
+    const key = this.#idToKey.get(id);
+    return key ? this.#byKey.get(key) : undefined;
   }
 
-  getByCdpId(cdpRequestId: string): CapturedRequest | undefined {
-    return this.#byCdpId.get(cdpRequestId);
+  /** Look up a record by the session that captured it and its CDP request id. */
+  getBySessionCdpId(
+    sessionKey: string,
+    cdpRequestId: string,
+  ): CapturedRequest | undefined {
+    return this.#byKey.get(this.#key(sessionKey, cdpRequestId));
   }
 
   query(q: RequestQuery): CapturedRequest[] {
@@ -193,18 +244,21 @@ export class RequestStore {
   }
 
   /**
-   * Lazily fetch a response body via CDP. Returns the decoded text (binary
-   * bodies are returned as base64 with `base64: true`).
+   * Lazily fetch a response body via CDP from the session that captured the
+   * request. Returns the decoded text (binary bodies are returned as base64
+   * with `base64: true`). Falls back to `Network.getRequestPostData` semantics
+   * are handled by the caller; this only fetches response bodies.
    */
   async getResponseBody(
     id: number,
   ): Promise<{body: string; base64: boolean} | undefined> {
     const record = this.getById(id);
-    if (!record || !this.#client) {
+    const client = this.#idToSession.get(id);
+    if (!record || !client) {
       return undefined;
     }
     try {
-      const result = await this.#client.send('Network.getResponseBody', {
+      const result = await client.send('Network.getResponseBody', {
         requestId: record.cdpRequestId,
       });
       return {body: result.body, base64: result.base64Encoded};
