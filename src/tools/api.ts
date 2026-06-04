@@ -331,7 +331,7 @@ export const apiRequest = defineTool({
           const fetchHeaders: Record<string, string> = {};
 
           // Auto-set content-type for JSON
-          if (params.jsonBody || (params.body && params.body.startsWith('{'))) {
+          if (params.jsonBody || (params.body && /^\s*[[{]/.test(params.body ?? ''))) {
             fetchHeaders['content-type'] = 'application/json';
           }
 

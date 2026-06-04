@@ -286,7 +286,7 @@ export class McpContext implements Context {
   async newPage(): Promise<Page> {
     const page = await this.browser.newPage();
     await this.createPagesSnapshot();
-    this.selectPage(page);
+    await this.selectPage(page);
     this.#networkCollector.addPage(page);
     this.#consoleCollector.addPage(page);
     return page;
@@ -350,7 +350,7 @@ export class McpContext implements Context {
         this.logger(
           'Selected page closed, auto-switching to another open page',
         );
-        this.selectPage(openPages[0]);
+        void this.selectPage(openPages[0]);
         return openPages[0];
       }
       if (!page) {
@@ -380,7 +380,7 @@ export class McpContext implements Context {
     return this.#selectedPage === page;
   }
 
-  selectPage(newPage: Page): void {
+  async selectPage(newPage: Page): Promise<void> {
     const oldPage = this.#selectedPage;
     if (oldPage) {
       oldPage.off('dialog', this.#dialogHandler);
@@ -388,8 +388,7 @@ export class McpContext implements Context {
     this.#selectedPage = newPage;
     newPage.on('dialog', this.#dialogHandler);
     this.#updateSelectedPageTimeouts();
-    // Reinitialize debugger for the new page
-    void this.reinitDebugger();
+    await this.reinitDebugger();
   }
 
   #updateSelectedPageTimeouts() {
@@ -459,7 +458,7 @@ export class McpContext implements Context {
     });
 
     if (!this.#selectedPage || this.#pages.indexOf(this.#selectedPage) === -1) {
-      this.selectPage(this.#pages[0]);
+      await this.selectPage(this.#pages[0]);
     }
 
     await this.detectOpenDevToolsWindows();
