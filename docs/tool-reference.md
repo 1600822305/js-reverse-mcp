@@ -23,7 +23,7 @@
   - [`list_console_messages`](#list_console_messages)
   - [`take_screenshot`](#take_screenshot)
   - [`take_snapshot`](#take_snapshot)
-- **[JS Reverse Engineering](#js-reverse-engineering)** (72 tools)
+- **[JS Reverse Engineering](#js-reverse-engineering)** (74 tools)
   - [`add_network_rule`](#add_network_rule)
   - [`analyze_encoded_string`](#analyze_encoded_string)
   - [`beautify_script`](#beautify_script)
@@ -95,6 +95,8 @@
   - [`trace_function`](#trace_function)
   - [`unhook_function`](#unhook_function)
   - [`unwatch_global`](#unwatch_global)
+  - [`wait_for_request`](#wait_for_request)
+  - [`wait_for_response`](#wait_for_response)
   - [`watch_global`](#watch_global)
 - **[Web Scraping](#web-scraping)** (3 tools)
   - [`extract`](#extract)
@@ -1143,6 +1145,38 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **watchId** (string) **(required)**: The watcher ID to remove.
+
+---
+
+### `wait_for_request`
+
+**Description:** Blocks until a network request matching the filters is observed (across the page and all auto-attached targets), then returns it. Use after triggering an action to grab the request it fires. Resolves as soon as the request is seen, before its response arrives.
+
+**Parameters:**
+
+- **isRegex** (boolean) _(optional)_
+- **method** (string) _(optional)_: HTTP method filter.
+- **newOnly** (boolean) _(optional)_: When true, ignore already-captured matches and wait for a fresh one. Set this before triggering the action if a stale match could exist.
+- **resourceType** (string) _(optional)_: CDP resource type filter (e.g. XHR, Fetch, Script).
+- **timeout** (integer) _(optional)_: Maximum wait time in milliseconds (default 30000).
+- **urlPattern** (string) _(optional)_: URL matcher: glob with *, substring, or regex (isRegex).
+
+---
+
+### `wait_for_response`
+
+**Description:** Blocks until a network request matching the filters has received a response (or failed) across the page and all auto-attached targets, then returns it. Use to grab the response of an XHR/fetch fired by an action.
+
+**Parameters:**
+
+- **includeBody** (boolean) _(optional)_: Include a truncated response body in the result.
+- **isRegex** (boolean) _(optional)_
+- **maxBodyLength** (integer) _(optional)_: Maximum body characters to display (default 2000).
+- **method** (string) _(optional)_: HTTP method filter.
+- **newOnly** (boolean) _(optional)_: When true, ignore already-captured matches and wait for a fresh one. Set this before triggering the action if a stale match could exist.
+- **resourceType** (string) _(optional)_: CDP resource type filter (e.g. XHR, Fetch, Script).
+- **timeout** (integer) _(optional)_: Maximum wait time in milliseconds (default 30000).
+- **urlPattern** (string) _(optional)_: URL matcher: glob with *, substring, or regex (isRegex).
 
 ---
 

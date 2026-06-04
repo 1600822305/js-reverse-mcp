@@ -44,6 +44,7 @@ import * as networkCookieTools from './tools/network/cookies.js';
 import * as networkEventSourceTools from './tools/network/eventsource.js';
 import * as networkReplayTools from './tools/network/replay.js';
 import * as networkRuleTools from './tools/network/rules.js';
+import * as networkWaitTools from './tools/network/wait.js';
 import * as networkWebsocketTools from './tools/network/websocket.js';
 import * as networkTools from './tools/network.js';
 import * as pagesTools from './tools/pages.js';
@@ -255,6 +256,7 @@ const tools = [
   ...Object.values(networkEventSourceTools),
   ...Object.values(networkReplayTools),
   ...Object.values(networkRuleTools),
+  ...Object.values(networkWaitTools),
   ...Object.values(networkWebsocketTools),
   ...Object.values(pagesTools),
   ...Object.values(screenshotTools),

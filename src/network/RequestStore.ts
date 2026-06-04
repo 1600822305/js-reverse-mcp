@@ -18,6 +18,29 @@ export interface RequestQuery {
   limit?: number;
 }
 
+export type WaitPhase = 'request' | 'response';
+
+export interface WaitOptions {
+  urlPattern?: string;
+  isRegex?: boolean;
+  method?: string;
+  resourceType?: string;
+  /**
+   * `request` resolves as soon as a matching request is observed; `response`
+   * waits until the matching request has a response (or has failed).
+   */
+  phase: WaitPhase;
+  timeoutMs: number;
+  /** When true, ignore already-captured matches and wait for a fresh one. */
+  newOnly?: boolean;
+}
+
+interface Waiter {
+  phase: WaitPhase;
+  match: (r: CapturedRequest) => boolean;
+  resolve: (r: CapturedRequest) => void;
+}
+
 interface SessionHandlers {
   requestWillBeSent: (e: Protocol.Network.RequestWillBeSentEvent) => void;
   responseReceived: (e: Protocol.Network.ResponseReceivedEvent) => void;
@@ -44,6 +67,7 @@ export class RequestStore {
   #idToSession = new Map<number, CDPSession>();
   #sessions = new Map<CDPSession, {key: string; handlers: SessionHandlers}>();
   #nextId = 1;
+  #waiters = new Set<Waiter>();
   readonly #maxEntries: number;
 
   constructor(maxEntries = 2000) {
@@ -120,6 +144,7 @@ export class RequestStore {
       if (event.request.postData !== undefined) {
         existing.requestBody = event.request.postData;
       }
+      this.#notify(existing, 'request');
       return;
     }
     const record: CapturedRequest = {
@@ -134,6 +159,7 @@ export class RequestStore {
       finished: false,
     };
     this.#insert(key, record, client);
+    this.#notify(record, 'request');
   };
 
   #onResponseReceived = (
@@ -154,6 +180,7 @@ export class RequestStore {
     if (!record.resourceType) {
       record.resourceType = event.type;
     }
+    this.#notify(record, 'response');
   };
 
   #onLoadingFinished = (
@@ -167,6 +194,7 @@ export class RequestStore {
     record.finished = true;
     record.endTime = Date.now();
     record.encodedDataLength = event.encodedDataLength;
+    this.#notify(record, 'response');
   };
 
   #onLoadingFailed = (
@@ -181,6 +209,7 @@ export class RequestStore {
     record.failed = true;
     record.errorText = event.errorText;
     record.endTime = Date.now();
+    this.#notify(record, 'response');
   };
 
   #insert(key: string, record: CapturedRequest, client: CDPSession): void {
@@ -265,5 +294,80 @@ export class RequestStore {
     } catch {
       return undefined;
     }
+  }
+
+  #notify(record: CapturedRequest, phase: WaitPhase): void {
+    if (this.#waiters.size === 0) {
+      return;
+    }
+    for (const waiter of [...this.#waiters]) {
+      // A `response` waiter is also satisfied by a `response`-phase event; a
+      // `request` waiter only by a `request`-phase event.
+      if (waiter.phase === 'request' && phase !== 'request') {
+        continue;
+      }
+      if (waiter.phase === 'response' && phase !== 'response') {
+        continue;
+      }
+      if (waiter.match(record)) {
+        this.#waiters.delete(waiter);
+        waiter.resolve(record);
+      }
+    }
+  }
+
+  /**
+   * Resolve once a request matching `opts` is observed. Returns the matching
+   * record, or `undefined` if `timeoutMs` elapses first. Unless `newOnly` is
+   * set, an already-captured match is returned immediately.
+   */
+  waitFor(opts: WaitOptions): Promise<CapturedRequest | undefined> {
+    const method = opts.method?.toUpperCase();
+    const matchesFilters = (r: CapturedRequest): boolean => {
+      if (
+        opts.urlPattern &&
+        !matchUrl(r.url, opts.urlPattern, opts.isRegex ?? false)
+      ) {
+        return false;
+      }
+      if (method && r.method.toUpperCase() !== method) {
+        return false;
+      }
+      if (opts.resourceType && r.resourceType !== opts.resourceType) {
+        return false;
+      }
+      return true;
+    };
+    const hasResponse = (r: CapturedRequest): boolean =>
+      r.status !== undefined || r.failed === true;
+    const match = (r: CapturedRequest): boolean => {
+      if (!matchesFilters(r)) {
+        return false;
+      }
+      return opts.phase === 'response' ? hasResponse(r) : true;
+    };
+
+    if (!opts.newOnly) {
+      const existing = this.getAll().filter(match);
+      if (existing.length > 0) {
+        return Promise.resolve(existing[existing.length - 1]);
+      }
+    }
+
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = (r: CapturedRequest | undefined): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        this.#waiters.delete(waiter);
+        resolve(r);
+      };
+      const timer = setTimeout(() => finish(undefined), opts.timeoutMs);
+      const waiter: Waiter = {phase: opts.phase, match, resolve: finish};
+      this.#waiters.add(waiter);
+    });
   }
 }
