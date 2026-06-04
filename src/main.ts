@@ -38,6 +38,7 @@ import * as debuggerTools from './tools/debugger.js';
 import * as deobfuscationTools from './tools/deobfuscation.js';
 import * as domTools from './tools/dom.js';
 import * as globalsTools from './tools/globals.js';
+import * as networkBatchReplayTools from './tools/network/batch-replay.js';
 import * as networkCaptureTools from './tools/network/capture.js';
 import * as networkConditionsTools from './tools/network/conditions.js';
 import * as networkCookieTools from './tools/network/cookies.js';
@@ -251,6 +252,7 @@ const tools = [
   ...Object.values(domTools),
   ...Object.values(globalsTools),
   ...Object.values(networkTools),
+  ...Object.values(networkBatchReplayTools),
   ...Object.values(networkCaptureTools),
   ...Object.values(networkConditionsTools),
   ...Object.values(networkCookieTools),
