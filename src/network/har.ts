@@ -11,8 +11,70 @@ interface HarHeader {
   value: string;
 }
 
+interface HarCookie {
+  name: string;
+  value: string;
+}
+
 function toHeaders(record: Record<string, string> | undefined): HarHeader[] {
   return Object.entries(record ?? {}).map(([name, value]) => ({name, value}));
+}
+
+function findHeader(
+  record: Record<string, string> | undefined,
+  name: string,
+): string | undefined {
+  if (!record) {
+    return undefined;
+  }
+  const lower = name.toLowerCase();
+  for (const [k, v] of Object.entries(record)) {
+    if (k.toLowerCase() === lower) {
+      return v;
+    }
+  }
+  return undefined;
+}
+
+/** Parse a request `Cookie` header into HAR cookie objects. */
+function requestCookies(
+  record: Record<string, string> | undefined,
+): HarCookie[] {
+  const header = findHeader(record, 'cookie');
+  if (!header) {
+    return [];
+  }
+  return header
+    .split(';')
+    .map(pair => pair.trim())
+    .filter(Boolean)
+    .map(pair => {
+      const eq = pair.indexOf('=');
+      return eq === -1
+        ? {name: pair, value: ''}
+        : {name: pair.slice(0, eq), value: pair.slice(eq + 1)};
+    });
+}
+
+/** Parse a response `Set-Cookie` header into HAR cookie objects. */
+function responseCookies(
+  record: Record<string, string> | undefined,
+): HarCookie[] {
+  const header = findHeader(record, 'set-cookie');
+  if (!header) {
+    return [];
+  }
+  // CDP collapses multiple Set-Cookie headers with newlines.
+  return header
+    .split('\n')
+    .map(line => line.split(';')[0].trim())
+    .filter(Boolean)
+    .map(pair => {
+      const eq = pair.indexOf('=');
+      return eq === -1
+        ? {name: pair, value: ''}
+        : {name: pair.slice(0, eq), value: pair.slice(eq + 1)};
+    });
 }
 
 function queryString(url: string): HarHeader[] {
@@ -46,6 +108,7 @@ export function buildHar(
         method: r.method,
         url: r.url,
         httpVersion: 'HTTP/1.1',
+        cookies: requestCookies(r.requestHeaders),
         headers: toHeaders(r.requestHeaders),
         queryString: queryString(r.url),
         postData: r.requestBody
@@ -64,13 +127,14 @@ export function buildHar(
         status: r.status ?? 0,
         statusText: r.statusText ?? (r.failed ? (r.errorText ?? 'Failed') : ''),
         httpVersion: 'HTTP/1.1',
+        cookies: responseCookies(r.responseHeaders),
         headers: toHeaders(r.responseHeaders),
         content: {
           size: r.encodedDataLength ?? (responseBody ? responseBody.length : 0),
           mimeType: r.mimeType ?? '',
           text: responseBody,
         },
-        redirectURL: '',
+        redirectURL: findHeader(r.responseHeaders, 'location') ?? '',
         headersSize: -1,
         bodySize: r.encodedDataLength ?? -1,
       },
@@ -78,6 +142,7 @@ export function buildHar(
       timings: {send: 0, wait: time, receive: 0},
       serverIPAddress: r.remoteIPAddress,
       _resourceType: r.resourceType,
+      _redirects: r.redirects,
     };
   });
 
@@ -85,6 +150,7 @@ export function buildHar(
     log: {
       version: '1.2',
       creator: {name: 'js-reverse-mcp', version: '1.0.0'},
+      pages: [],
       entries,
     },
   };

@@ -67,7 +67,16 @@ export class RequestStore {
   ): void => {
     const existing = this.#byCdpId.get(event.requestId);
     if (existing) {
-      // Redirect chain reuses the requestId; refresh the target.
+      // CDP reuses the requestId across a redirect chain. Record the hop we are
+      // leaving (its URL + 3xx status from redirectResponse) before retargeting.
+      const redirect = event.redirectResponse;
+      if (redirect) {
+        (existing.redirects ??= []).push({
+          url: existing.url,
+          status: redirect.status,
+          statusText: redirect.statusText,
+        });
+      }
       existing.url = event.request.url;
       existing.method = event.request.method;
       existing.requestHeaders = {...event.request.headers};

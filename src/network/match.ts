@@ -17,19 +17,21 @@
 const REGEX_META = /[.*+?^${}()|[\]\\]/g;
 
 /**
- * Convert a glob pattern (only `*` is special) into an anchored RegExp.
- * All other characters are treated literally.
+ * Convert a glob pattern (only `*` is special) into an unanchored RegExp. All
+ * other characters are escaped and matched literally. The pattern is left
+ * unanchored so `example.com/api/*` matches anywhere inside the full URL
+ * (`https://example.com/api/v1`); use `*` explicitly for prefix wildcards.
  */
 export function globToRegExp(pattern: string): RegExp {
   const escaped = pattern.replace(REGEX_META, '\\$&').replace(/\\\*/g, '.*');
-  return new RegExp(`^${escaped}$`);
+  return new RegExp(escaped);
 }
 
 /**
  * Test whether a URL matches a pattern.
  *
  * - `isRegex` true: `pattern` is treated as a JS regular expression (unanchored).
- * - pattern contains `*`: treated as an anchored glob.
+ * - pattern contains `*`: treated as an unanchored glob (`*` = any chars).
  * - otherwise: treated as a case-sensitive substring ("contains") match, which
  *   is the most intuitive default for interactive use.
  */
@@ -52,19 +54,21 @@ export function matchUrl(
 }
 
 /**
- * Build the `urlPattern` understood by CDP's `Fetch.enable`, which supports
- * `*` (any chars) and `?` (one char) wildcards. Substring patterns are wrapped
- * with `*` on both sides; regex patterns cannot be expressed to CDP so we fall
- * back to the broadest pattern and rely on {@link matchUrl} to filter.
+ * Build the `urlPattern` understood by CDP's `Fetch.enable`, which matches the
+ * pattern against the *entire* URL using `*` (any chars) / `?` (one char)
+ * wildcards. Because matching is whole-URL, we wrap the pattern with `*` on any
+ * side that isn't already wildcarded so an unanchored glob/substring like
+ * `example.com/api/*` still pauses `https://example.com/api/v1`. The Node-side
+ * {@link matchUrl} remains the precise arbiter. Regex patterns cannot be
+ * expressed to CDP, so we fall back to the broadest pattern.
  */
 export function toCdpUrlPattern(pattern: string, isRegex: boolean): string {
   if (isRegex) {
     return '*';
   }
-  if (pattern.includes('*')) {
-    return pattern;
-  }
-  return `*${pattern}*`;
+  const prefix = pattern.startsWith('*') ? '' : '*';
+  const suffix = pattern.endsWith('*') ? '' : '*';
+  return `${prefix}${pattern}${suffix}`;
 }
 
 /** Normalise a CDP header array/object into a plain lowercase-insensitive map. */

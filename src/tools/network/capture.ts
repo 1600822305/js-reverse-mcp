@@ -87,7 +87,16 @@ export const searchNetwork = defineTool({
           continue;
         }
         const body = await store.getResponseBody(r.id);
-        if (body && !body.base64 && body.body.includes(needle)) {
+        if (!body) {
+          continue;
+        }
+        // Decode base64 bodies so the search works on the actual payload text
+        // (e.g. gzipped responses are already inflated by CDP; binary bodies
+        // are decoded as UTF-8 best-effort).
+        const text = body.base64
+          ? Buffer.from(body.body, 'base64').toString('utf8')
+          : body.body;
+        if (text.includes(needle)) {
           filtered.push(r);
         }
       }

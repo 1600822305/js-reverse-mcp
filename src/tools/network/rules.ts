@@ -10,6 +10,10 @@ import type {Protocol} from '../../third_party/index.js';
 import {ToolCategory} from '../categories.js';
 import {defineTool} from '../ToolDefinition.js';
 
+// Monotonic counter so auto-generated ids never collide, even within the same
+// millisecond (Date.now() alone is not unique under rapid/scripted calls).
+let ruleCounter = 0;
+
 export const addNetworkRule = defineTool({
   name: 'add_network_rule',
   description:
@@ -122,7 +126,7 @@ export const addNetworkRule = defineTool({
     const stage: RuleStage =
       params.stage ??
       (params.action === 'modifyResponse' ? 'Response' : 'Request');
-    const id = params.ruleId || `rule_${Date.now()}`;
+    const id = params.ruleId || `rule_${Date.now()}_${++ruleCounter}`;
 
     const rule: NetworkRule = {
       id,
@@ -150,6 +154,12 @@ export const addNetworkRule = defineTool({
       response.appendResponseLine(`Network rule added: ${id}`);
       response.appendResponseLine(`- Pattern: ${rule.urlPattern}`);
       response.appendResponseLine(`- Action: ${rule.action} (stage: ${stage})`);
+      if (rule.action === 'continue') {
+        response.appendResponseLine(
+          'Note: "continue" is observe-only and does not pause requests; ' +
+            'use search_network to inspect captured traffic.',
+        );
+      }
       response.appendResponseLine(
         `Use list_network_rules to view stats, remove_network_rule("${id}") to remove.`,
       );
