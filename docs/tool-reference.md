@@ -7,11 +7,9 @@
   - [`navigate_page`](#navigate_page)
   - [`new_page`](#new_page)
   - [`select_page`](#select_page)
-- **[Network](#network)** (8 tools)
+- **[Network](#network)** (6 tools)
   - [`api_request`](#api_request)
   - [`delete_token`](#delete_token)
-  - [`extract_page_token`](#extract_page_token)
-  - [`firebase_login`](#firebase_login)
   - [`list_network_requests`](#list_network_requests)
   - [`list_tokens`](#list_tokens)
   - [`save_token`](#save_token)
@@ -175,31 +173,6 @@
 **Parameters:**
 
 - **name** (string) **(required)**: The name of the token to delete.
-
----
-
-### `extract_page_token`
-
-**Description:** [`Extract`](#extract) authentication tokens from the current page. Searches React fiber state, cookies, localStorage, and common global variables for auth tokens. Optionally saves the found token.
-
-**Parameters:**
-
-- **saveName** (string) _(optional)_: If provided, save the found token with this name.
-- **setActive** (boolean) _(optional)_: If true and saveName is provided, set as active token.
-
----
-
-### `firebase_login`
-
-**Description:** Login with email/password using Firebase Auth and save the resulting token. Useful for quickly switching between accounts.
-
-**Parameters:**
-
-- **apiKey** (string) _(optional)_: Firebase API key (default: Windsurf key).
-- **email** (string) **(required)**: Email address to login with.
-- **password** (string) **(required)**: Password.
-- **saveName** (string) **(required)**: Name to save the token as.
-- **setActive** (boolean) _(optional)_: Set as active token (default: true).
 
 ---
 
