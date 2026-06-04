@@ -79,15 +79,10 @@
   - [`unhook_function`](#unhook_function)
   - [`unwatch_global`](#unwatch_global)
   - [`watch_global`](#watch_global)
-- **[Web Scraping](#web-scraping)** (8 tools)
-  - [`click_and_extract`](#click_and_extract)
+- **[Web Scraping](#web-scraping)** (3 tools)
+  - [`extract`](#extract)
   - [`extract_form_data`](#extract_form_data)
-  - [`extract_links`](#extract_links)
   - [`extract_metadata`](#extract_metadata)
-  - [`extract_structured`](#extract_structured)
-  - [`extract_table`](#extract_table)
-  - [`extract_text_blocks`](#extract_text_blocks)
-  - [`smart_extract`](#smart_extract)
 
 ## Navigation automation
 
@@ -166,7 +161,7 @@
 
 ### `extract_page_token`
 
-**Description:** Extract authentication tokens from the current page. Searches React fiber state, cookies, localStorage, and common global variables for auth tokens. Optionally saves the found token.
+**Description:** [`Extract`](#extract) authentication tokens from the current page. Searches React fiber state, cookies, localStorage, and common global variables for auth tokens. Optionally saves the found token.
 
 **Parameters:**
 
@@ -384,7 +379,7 @@ in the DevTools Elements panel (if any).
 
 ### `decode_protobuf`
 
-**Description:** Decode protobuf binary without a .proto schema. Provide inline data (hex/base64) OR a url to fetch and decode (e.g. gRPC-Connect responses). Analyzes wire format to extract field numbers, types, and values, including nested messages.
+**Description:** Decode protobuf binary without a .proto schema. Provide inline data (hex/base64) OR a url to fetch and decode (e.g. gRPC-Connect responses). Analyzes wire format to [`extract`](#extract) field numbers, types, and values, including nested messages.
 
 **Parameters:**
 
@@ -935,22 +930,34 @@ in the DevTools Elements panel (if any).
 
 ## Web Scraping
 
-### `click_and_extract`
+### `extract`
 
-**Description:** Click an element and then extract content after the page updates. Useful for loading more content or navigating tabs.
+**Description:** Unified web content extraction. Use `type` to choose a mode: "elements" (CSS selector -> text/attribute/innerHTML of each match), "structured" (a `fields` map of name->selector, optionally repeated over a `containerSelector` to return a list; each field can also pull an attribute or innerHTML), "links" (anchor tags, optional urlPattern filter and container), "table" (headers + rows) or "textBlocks" (page sections grouped by headings). The default type "auto" picks "structured" when `fields` is given, otherwise "elements". Optionally click an element first (clickSelector) and wait (waitForSelector / waitMs) before extracting, e.g. to load more content or switch tabs.
 
 **Parameters:**
 
-- **clickSelector** (string) **(required)**: CSS selector for the element to click.
-- **extractAttribute** (string) _(optional)_: Attribute to extract. If not specified, extracts text content.
-- **extractSelector** (string) **(required)**: CSS selector for the content to extract after clicking.
-- **waitMs** (integer) _(optional)_: Milliseconds to wait after clicking before extracting (default: 1000).
+- **attribute** (string) _(optional)_: For type "elements": attribute to [`extract`](#extract) (e.g. "href", "src"). If omitted, extracts text content.
+- **clickSelector** (string) _(optional)_: Optional: click this element before extracting (e.g. a "load more" button or a tab).
+- **containerSelector** (string) _(optional)_: For "structured": repeating container selector to return a list of items. For "links": container to search within (default whole page). For "textBlocks": content container (default "body").
+- **fields** (object) _(optional)_: For type "structured": map of field name -> CSS selector, or -> {selector, attribute?, html?} to pull an attribute or innerHTML instead of text. Example: {"title":"h1","img":{"selector":"img","attribute":"src"}}. Providing this triggers structured mode under "auto".
+- **hasHeader** (boolean) _(optional)_: For type "table": treat the first row as a header row (default: true).
+- **headingLevel** (string) _(optional)_: For type "textBlocks": heading selectors that start a section (default: "h1,h2,h3,h4,h5,h6").
+- **includeSubheadings** (boolean) _(optional)_: For type "textBlocks": include subheadings within each section (default: true).
+- **includeText** (boolean) _(optional)_: For type "links": include link text in results (default: true).
+- **limit** (integer) _(optional)_: Maximum number of items to [`extract`](#extract) (applies to "elements" and to "structured" lists).
+- **returnHtml** (boolean) _(optional)_: For type "elements": return innerHTML instead of text content.
+- **selector** (string) _(optional)_: CSS selector. Required for type "elements"; for type "table" it selects the table(s) (default "table").
+- **tableIndex** (integer) _(optional)_: For type "table": index of the table if multiple match (default: 0).
+- **type** (enum: "auto", "elements", "structured", "links", "table", "textBlocks") _(optional)_: Extraction mode. "auto" (default) infers structured when `fields` is provided, otherwise elements.
+- **urlPattern** (string) _(optional)_: For type "links": regex pattern to filter URLs.
+- **waitForSelector** (string) _(optional)_: Optional: after clicking, wait until this selector appears (max 10s) before extracting.
+- **waitMs** (integer) _(optional)_: Optional: milliseconds to wait after clicking before extracting (default: 0).
 
 ---
 
 ### `extract_form_data`
 
-**Description:** Extract form structure and current values, including hidden fields. By default returns all matching forms; pass formIndex to inspect a single form. Password values are masked unless maskPasswords is set to false.
+**Description:** [`Extract`](#extract) form structure and current values, including hidden fields. By default returns all matching forms; pass formIndex to inspect a single form. Password values are masked unless maskPasswords is set to false.
 
 **Parameters:**
 
@@ -960,71 +967,10 @@ in the DevTools Elements panel (if any).
 
 ---
 
-### `extract_links`
-
-**Description:** Extract all links (anchor tags) from the page. Optionally filter by pattern.
-
-**Parameters:**
-
-- **containerSelector** (string) _(optional)_: CSS selector for the container to search within. Omit for entire page.
-- **includeText** (boolean) _(optional)_: Include link text in results (default: true).
-- **urlPattern** (string) _(optional)_: Regex pattern to filter URLs. Only matching URLs will be returned.
-
----
-
 ### `extract_metadata`
 
-**Description:** Extract page metadata including JSON-LD, Open Graph, Twitter cards, and standard meta tags.
+**Description:** [`Extract`](#extract) page metadata including JSON-LD, Open Graph, Twitter cards, and standard meta tags.
 
 **Parameters:** None
-
----
-
-### `extract_structured`
-
-**Description:** Extract structured data from the page using a schema of CSS selectors. Perfect for extracting multiple related fields at once.
-
-**Parameters:**
-
-- **containerSelector** (string) _(optional)_: CSS selector for repeating container (for lists). If specified, extracts an array of items.
-- **fields** (object) **(required)**: Object mapping field names to CSS selectors. Example: {"title": "h1", "price": ".price", "description": ".desc"}
-- **limit** (integer) _(optional)_: Maximum number of items to extract when using containerSelector.
-
----
-
-### `extract_table`
-
-**Description:** Extract data from HTML tables. Returns structured array with headers and rows.
-
-**Parameters:**
-
-- **hasHeader** (boolean) _(optional)_: Whether the first row is a header (default: true).
-- **selector** (string) _(optional)_: CSS selector for the table (default: "table").
-- **tableIndex** (integer) _(optional)_: Index of the table if multiple tables match (default: 0).
-
----
-
-### `extract_text_blocks`
-
-**Description:** Extract text content organized by sections (headings and their following content). Useful for article/documentation pages.
-
-**Parameters:**
-
-- **containerSelector** (string) _(optional)_: CSS selector for the main content container (default: "body").
-- **headingLevel** (string) _(optional)_: Heading selectors to use (default: "h1,h2,h3,h4,h5,h6").
-- **includeSubheadings** (boolean) _(optional)_: Include subheadings within each section (default: true).
-
----
-
-### `smart_extract`
-
-**Description:** Extract content from the page using CSS selectors. Returns text content, attributes, or HTML of matched elements.
-
-**Parameters:**
-
-- **attribute** (string) _(optional)_: Attribute to extract (e.g., "href", "src"). If not specified, extracts text content.
-- **limit** (integer) _(optional)_: Maximum number of elements to extract. Omit for all matches.
-- **returnHtml** (boolean) _(optional)_: If true, returns innerHTML instead of text content.
-- **selector** (string) **(required)**: CSS selector to match elements.
 
 ---

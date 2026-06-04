@@ -187,15 +187,11 @@ claude mcp add js-reverse node /你的路径/js-reverse-mcp/build/src/index.js
 
 ### 网页抓取
 
-| 工具                  | 描述                                                           |
-| --------------------- | -------------------------------------------------------------- |
-| `smart_extract`       | 用 CSS 选择器提取元素的文本、属性或 innerHTML                  |
-| `extract_table`       | 提取页面表格数据，返回结构化的行列数据                         |
-| `extract_links`       | 提取页面所有链接，支持 URL 正则过滤                            |
-| `extract_structured`  | 按字段 Schema 批量提取结构化数据（支持列表模式）               |
-| `extract_text_blocks` | 按标题层级提取页面文本块（适合文章/文档页面）                  |
-| `extract_metadata`    | 提取页面元数据（JSON-LD、Open Graph、Twitter Card、标准 meta） |
-| `extract_form_data`   | 提取表单结构和当前值（含隐藏字段；默认返回所有表单、密码打码） |
+| 工具                | 描述                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extract`           | 统一抽取工具，用 `type` 选择模式：elements（CSS 选择器取文本/属性/innerHTML）/ structured（字段 Schema，可跨 `containerSelector` 取列表，字段可取属性或 innerHTML）/ links（链接，支持 URL 正则过滤）/ table（表格行列）/ textBlocks（按标题层级分块）。`auto`（默认）有 `fields` 走 structured 否则 elements；可先 `clickSelector`+`waitForSelector`/`waitMs` 再抽取 |
+| `extract_metadata`  | 提取页面元数据（JSON-LD、Open Graph、Twitter Card、标准 meta）                                                                                                                                                                                                                                                                                                        |
+| `extract_form_data` | 提取表单结构和当前值（含隐藏字段；默认返回所有表单、密码打码）                                                                                                                                                                                                                                                                                                        |
 
 ### 加密检测与分析
 
@@ -268,7 +264,6 @@ claude mcp add js-reverse node /你的路径/js-reverse-mcp/build/src/index.js
 | `take_screenshot`       | 截取页面截图（支持全页面/元素） |
 | `take_snapshot`         | 获取页面无障碍树快照            |
 | `evaluate_script`       | 在页面中执行 JavaScript         |
-| `click_and_extract`     | 点击元素后等待并提取更新内容    |
 | `list_console_messages` | 获取控制台消息                  |
 
 ---

@@ -8,11 +8,10 @@
  * Smart Web Scraping Tools
  *
  * This module provides intelligent web scraping tools:
- * - Smart content extraction using CSS selectors
- * - Table data extraction
- * - Link extraction
- * - Structured data extraction
- * - Batch element extraction
+ * - `extract`: unified content extraction (elements / structured / links /
+ *   table / text blocks) with optional pre-extraction click + wait
+ * - `extract_form_data`: form structure and current values
+ * - `extract_metadata`: JSON-LD, Open Graph, Twitter cards and meta tags
  */
 
 import {zod} from '../third_party/index.js';
@@ -20,64 +19,216 @@ import {zod} from '../third_party/index.js';
 import {ToolCategory} from './categories.js';
 import {defineTool} from './ToolDefinition.js';
 
-// ==================== Smart Content Extraction ====================
+// ==================== Unified Content Extraction ====================
 
 /**
- * Extract content using CSS selectors.
+ * Unified content extraction.
+ *
+ * Replaces smart_extract, extract_structured, extract_links, extract_table,
+ * extract_text_blocks and click_and_extract with a single tool whose `type`
+ * selects the extraction strategy, plus an optional pre-extraction click/wait.
  */
-export const smartExtract = defineTool({
-  name: 'smart_extract',
+export const extract = defineTool({
+  name: 'extract',
   description:
-    'Extract content from the page using CSS selectors. Returns text content, attributes, or HTML of matched elements.',
+    'Unified web content extraction. Use `type` to choose a mode: "elements" (CSS selector -> text/attribute/innerHTML of each match), "structured" (a `fields` map of name->selector, optionally repeated over a `containerSelector` to return a list; each field can also pull an attribute or innerHTML), "links" (anchor tags, optional urlPattern filter and container), "table" (headers + rows) or "textBlocks" (page sections grouped by headings). The default type "auto" picks "structured" when `fields` is given, otherwise "elements". Optionally click an element first (clickSelector) and wait (waitForSelector / waitMs) before extracting, e.g. to load more content or switch tabs.',
   annotations: {
-    title: 'Smart Extract',
+    title: 'Extract',
     category: ToolCategory.SCRAPING,
-    readOnlyHint: true,
+    readOnlyHint: false,
   },
   schema: {
+    type: zod
+      .enum(['auto', 'elements', 'structured', 'links', 'table', 'textBlocks'])
+      .optional()
+      .default('auto')
+      .describe(
+        'Extraction mode. "auto" (default) infers structured when `fields` is provided, otherwise elements.',
+      ),
     selector: zod
       .string()
-      .describe('CSS selector to match elements.'),
+      .optional()
+      .describe(
+        'CSS selector. Required for type "elements"; for type "table" it selects the table(s) (default "table").',
+      ),
     attribute: zod
       .string()
       .optional()
       .describe(
-        'Attribute to extract (e.g., "href", "src"). If not specified, extracts text content.',
+        'For type "elements": attribute to extract (e.g. "href", "src"). If omitted, extracts text content.',
       ),
     returnHtml: zod
       .boolean()
       .optional()
       .default(false)
-      .describe('If true, returns innerHTML instead of text content.'),
+      .describe(
+        'For type "elements": return innerHTML instead of text content.',
+      ),
     limit: zod
       .number()
       .int()
       .optional()
-      .describe('Maximum number of elements to extract. Omit for all matches.'),
+      .describe(
+        'Maximum number of items to extract (applies to "elements" and to "structured" lists).',
+      ),
+    fields: zod
+      .record(
+        zod.union([
+          zod.string(),
+          zod.object({
+            selector: zod.string(),
+            attribute: zod.string().optional(),
+            html: zod.boolean().optional(),
+          }),
+        ]),
+      )
+      .optional()
+      .describe(
+        'For type "structured": map of field name -> CSS selector, or -> {selector, attribute?, html?} to pull an attribute or innerHTML instead of text. Example: {"title":"h1","img":{"selector":"img","attribute":"src"}}. Providing this triggers structured mode under "auto".',
+      ),
+    containerSelector: zod
+      .string()
+      .optional()
+      .describe(
+        'For "structured": repeating container selector to return a list of items. For "links": container to search within (default whole page). For "textBlocks": content container (default "body").',
+      ),
+    urlPattern: zod
+      .string()
+      .optional()
+      .describe('For type "links": regex pattern to filter URLs.'),
+    includeText: zod
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        'For type "links": include link text in results (default: true).',
+      ),
+    tableIndex: zod
+      .number()
+      .int()
+      .optional()
+      .default(0)
+      .describe(
+        'For type "table": index of the table if multiple match (default: 0).',
+      ),
+    hasHeader: zod
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        'For type "table": treat the first row as a header row (default: true).',
+      ),
+    headingLevel: zod
+      .string()
+      .optional()
+      .default('h1,h2,h3,h4,h5,h6')
+      .describe(
+        'For type "textBlocks": heading selectors that start a section (default: "h1,h2,h3,h4,h5,h6").',
+      ),
+    includeSubheadings: zod
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        'For type "textBlocks": include subheadings within each section (default: true).',
+      ),
+    clickSelector: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional: click this element before extracting (e.g. a "load more" button or a tab).',
+      ),
+    waitForSelector: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional: after clicking, wait until this selector appears (max 10s) before extracting.',
+      ),
+    waitMs: zod
+      .number()
+      .int()
+      .optional()
+      .default(0)
+      .describe(
+        'Optional: milliseconds to wait after clicking before extracting (default: 0).',
+      ),
   },
   handler: async (request, response, context) => {
-    const {selector, attribute, returnHtml, limit} = request.params;
+    const {
+      type,
+      selector,
+      attribute,
+      returnHtml,
+      limit,
+      fields,
+      containerSelector,
+      urlPattern,
+      includeText,
+      tableIndex,
+      hasHeader,
+      headingLevel,
+      includeSubheadings,
+      clickSelector,
+      waitForSelector,
+      waitMs,
+    } = request.params;
     const page = context.getSelectedPage();
 
+    const resolvedType =
+      !type || type === 'auto' ? (fields ? 'structured' : 'elements') : type;
+
+    if (resolvedType === 'elements' && !selector) {
+      response.appendResponseLine(
+        'Error: type "elements" requires a `selector` (or provide `fields` for structured extraction).',
+      );
+      return;
+    }
+    if (resolvedType === 'structured' && !fields) {
+      response.appendResponseLine(
+        'Error: type "structured" requires `fields`.',
+      );
+      return;
+    }
+
     try {
-      const extractCode = `
+      if (clickSelector) {
+        const clickElement = await page.$(clickSelector);
+        if (!clickElement) {
+          response.appendResponseLine(
+            `Error: Element not found: ${clickSelector}`,
+          );
+          return;
+        }
+        await clickElement.click();
+        if (waitForSelector) {
+          await page.waitForSelector(waitForSelector, {timeout: 10000});
+        }
+        if (waitMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, waitMs));
+        }
+      }
+
+      let extractCode: string;
+      switch (resolvedType) {
+        case 'elements':
+          extractCode = `
 (function() {
   const elements = document.querySelectorAll(${JSON.stringify(selector)});
   const results = [];
   const maxItems = ${limit ?? 'elements.length'};
-  
+
   for (let i = 0; i < Math.min(elements.length, maxItems); i++) {
     const el = elements[i];
     let value;
-    
-    if (${JSON.stringify(attribute)}) {
-      value = el.getAttribute(${JSON.stringify(attribute)});
+
+    if (${JSON.stringify(attribute ?? null)}) {
+      value = el.getAttribute(${JSON.stringify(attribute ?? '')});
     } else if (${returnHtml}) {
       value = el.innerHTML;
     } else {
       value = el.textContent?.trim();
     }
-    
+
     if (value !== null && value !== undefined) {
       results.push({
         index: i,
@@ -88,8 +239,9 @@ export const smartExtract = defineTool({
       });
     }
   }
-  
+
   return {
+    type: 'elements',
     selector: ${JSON.stringify(selector)},
     count: elements.length,
     extracted: results.length,
@@ -97,79 +249,128 @@ export const smartExtract = defineTool({
   };
 })()
 `;
-
-      const result = await page.evaluate(extractCode);
-      response.appendResponseLine(JSON.stringify(result, null, 2));
-    } catch (error) {
-      response.appendResponseLine(
-        `Error extracting content: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  },
-});
-
-/**
- * Extract table data.
- */
-export const extractTable = defineTool({
-  name: 'extract_table',
-  description:
-    'Extract data from HTML tables. Returns structured array with headers and rows.',
-  annotations: {
-    title: 'Extract Table',
-    category: ToolCategory.SCRAPING,
-    readOnlyHint: true,
-  },
-  schema: {
-    selector: zod
-      .string()
-      .optional()
-      .default('table')
-      .describe('CSS selector for the table (default: "table").'),
-    tableIndex: zod
-      .number()
-      .int()
-      .optional()
-      .default(0)
-      .describe('Index of the table if multiple tables match (default: 0).'),
-    hasHeader: zod
-      .boolean()
-      .optional()
-      .default(true)
-      .describe('Whether the first row is a header (default: true).'),
-  },
-  handler: async (request, response, context) => {
-    const {selector, tableIndex, hasHeader} = request.params;
-    const page = context.getSelectedPage();
-
-    try {
-      const extractCode = `
+          break;
+        case 'structured':
+          extractCode = `
 (function() {
-  const tables = document.querySelectorAll(${JSON.stringify(selector)});
-  
-  if (tables.length === 0) {
-    return { error: 'No tables found matching selector: ${selector}' };
+  const fieldsSchema = ${JSON.stringify(fields)};
+  const containerSel = ${JSON.stringify(containerSelector ?? null)};
+  const maxItems = ${limit ?? 'Infinity'};
+
+  function getValue(el, spec) {
+    if (spec && typeof spec === 'object') {
+      if (spec.attribute) return el.getAttribute(spec.attribute);
+      if (spec.html) return el.innerHTML;
+    }
+    return el.textContent?.trim() || el.value || '';
   }
-  
+
+  function extractFields(root) {
+    const result = {};
+    for (const [fieldName, spec] of Object.entries(fieldsSchema)) {
+      const selector = (spec && typeof spec === 'object') ? spec.selector : spec;
+      const el = root.querySelector(selector);
+      result[fieldName] = el ? getValue(el, spec) : null;
+    }
+    return result;
+  }
+
+  if (containerSel) {
+    const containers = document.querySelectorAll(containerSel);
+    const results = [];
+    for (let i = 0; i < Math.min(containers.length, maxItems); i++) {
+      results.push(extractFields(containers[i]));
+    }
+    return {
+      type: 'structured',
+      kind: 'array',
+      containerSelector: containerSel,
+      totalContainers: containers.length,
+      extracted: results.length,
+      items: results
+    };
+  } else {
+    return { type: 'structured', kind: 'object', data: extractFields(document) };
+  }
+})()
+`;
+          break;
+        case 'links':
+          extractCode = `
+(function() {
+  const container = ${containerSelector ? `document.querySelector(${JSON.stringify(containerSelector)})` : 'document'};
+
+  if (!container) {
+    return { error: 'Container not found: ' + ${JSON.stringify(containerSelector ?? null)} };
+  }
+
+  const links = container.querySelectorAll('a[href]');
+  const results = [];
+  const urlRegex = ${urlPattern ? `new RegExp(${JSON.stringify(urlPattern)})` : 'null'};
+
+  links.forEach((link, index) => {
+    const href = link.href;
+
+    if (urlRegex && !urlRegex.test(href)) {
+      return;
+    }
+
+    const item = {
+      index: index,
+      href: href,
+      relativeHref: link.getAttribute('href')
+    };
+
+    if (${includeText}) {
+      item.text = link.textContent?.trim() || '';
+    }
+
+    if (link.target) item.target = link.target;
+    if (link.title) item.title = link.title;
+
+    results.push(item);
+  });
+
+  return {
+    type: 'links',
+    totalLinks: links.length,
+    matchedLinks: results.length,
+    containerSelector: ${JSON.stringify(containerSelector ?? null)} || 'document',
+    urlPattern: ${JSON.stringify(urlPattern ?? null)} || null,
+    links: results
+  };
+})()
+`;
+          break;
+        case 'table':
+          extractCode = `
+(function() {
+  const tableSelector = ${JSON.stringify(selector ?? 'table')};
+  const tables = document.querySelectorAll(tableSelector);
+
+  if (tables.length === 0) {
+    return { error: 'No tables found matching selector: ' + tableSelector };
+  }
+
   const tableIdx = ${tableIndex};
   if (tableIdx >= tables.length) {
     return { error: 'Table index ' + tableIdx + ' out of range. Found ' + tables.length + ' tables.' };
   }
-  
+
   const table = tables[tableIdx];
   const rows = table.querySelectorAll('tr');
   const result = {
+    type: 'table',
     tableCount: tables.length,
     selectedIndex: tableIdx,
     headers: [],
     data: [],
     rowCount: rows.length
   };
-  
+
   const hasHeaderRow = ${hasHeader};
   let startIdx = 0;
-  
-  // Extract headers
+
   if (hasHeaderRow && rows.length > 0) {
     const headerRow = rows[0];
     const headerCells = headerRow.querySelectorAll('th, td');
@@ -178,268 +379,46 @@ export const extractTable = defineTool({
     });
     startIdx = 1;
   }
-  
-  // Extract data rows
+
   for (let i = startIdx; i < rows.length; i++) {
     const row = rows[i];
     const cells = row.querySelectorAll('td, th');
     const rowData = [];
-    
+
     cells.forEach(cell => {
       rowData.push(cell.textContent?.trim() || '');
     });
-    
+
     if (rowData.length > 0) {
       result.data.push(rowData);
     }
   }
-  
+
   return result;
 })()
 `;
-
-      const result = await page.evaluate(extractCode);
-      response.appendResponseLine(JSON.stringify(result, null, 2));
-    } catch (error) {
-      response.appendResponseLine(
-        `Error extracting table: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  },
-});
-
-/**
- * Extract all links from the page.
- */
-export const extractLinks = defineTool({
-  name: 'extract_links',
-  description:
-    'Extract all links (anchor tags) from the page. Optionally filter by pattern.',
-  annotations: {
-    title: 'Extract Links',
-    category: ToolCategory.SCRAPING,
-    readOnlyHint: true,
-  },
-  schema: {
-    containerSelector: zod
-      .string()
-      .optional()
-      .describe('CSS selector for the container to search within. Omit for entire page.'),
-    urlPattern: zod
-      .string()
-      .optional()
-      .describe('Regex pattern to filter URLs. Only matching URLs will be returned.'),
-    includeText: zod
-      .boolean()
-      .optional()
-      .default(true)
-      .describe('Include link text in results (default: true).'),
-  },
-  handler: async (request, response, context) => {
-    const {containerSelector, urlPattern, includeText} = request.params;
-    const page = context.getSelectedPage();
-
-    try {
-      const extractCode = `
+          break;
+        case 'textBlocks':
+          extractCode = `
 (function() {
-  const container = ${containerSelector ? `document.querySelector(${JSON.stringify(containerSelector)})` : 'document'};
-  
+  const containerSelector = ${JSON.stringify(containerSelector ?? 'body')};
+  const container = document.querySelector(containerSelector);
+
   if (!container) {
-    return { error: 'Container not found: ${containerSelector}' };
+    return { error: 'Container not found: ' + containerSelector };
   }
-  
-  const links = container.querySelectorAll('a[href]');
-  const results = [];
-  const urlRegex = ${urlPattern ? `new RegExp(${JSON.stringify(urlPattern)})` : 'null'};
-  
-  links.forEach((link, index) => {
-    const href = link.href;
-    
-    if (urlRegex && !urlRegex.test(href)) {
-      return;
-    }
-    
-    const item = {
-      index: index,
-      href: href,
-      relativeHref: link.getAttribute('href')
-    };
-    
-    if (${includeText}) {
-      item.text = link.textContent?.trim() || '';
-    }
-    
-    if (link.target) item.target = link.target;
-    if (link.title) item.title = link.title;
-    
-    results.push(item);
-  });
-  
-  return {
-    totalLinks: links.length,
-    matchedLinks: results.length,
-    containerSelector: ${JSON.stringify(containerSelector)} || 'document',
-    urlPattern: ${JSON.stringify(urlPattern)} || null,
-    links: results
-  };
-})()
-`;
 
-      const result = await page.evaluate(extractCode);
-      response.appendResponseLine(JSON.stringify(result, null, 2));
-    } catch (error) {
-      response.appendResponseLine(
-        `Error extracting links: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  },
-});
-
-/**
- * Extract structured data using multiple selectors.
- */
-export const extractStructured = defineTool({
-  name: 'extract_structured',
-  description:
-    'Extract structured data from the page using a schema of CSS selectors. Perfect for extracting multiple related fields at once.',
-  annotations: {
-    title: 'Extract Structured Data',
-    category: ToolCategory.SCRAPING,
-    readOnlyHint: true,
-  },
-  schema: {
-    fields: zod
-      .record(zod.string())
-      .describe(
-        'Object mapping field names to CSS selectors. Example: {"title": "h1", "price": ".price", "description": ".desc"}',
-      ),
-    containerSelector: zod
-      .string()
-      .optional()
-      .describe('CSS selector for repeating container (for lists). If specified, extracts an array of items.'),
-    limit: zod
-      .number()
-      .int()
-      .optional()
-      .describe('Maximum number of items to extract when using containerSelector.'),
-  },
-  handler: async (request, response, context) => {
-    const {fields, containerSelector, limit} = request.params;
-    const page = context.getSelectedPage();
-
-    try {
-      const extractCode = `
-(function() {
-  const fieldsSchema = ${JSON.stringify(fields)};
-  const containerSel = ${JSON.stringify(containerSelector)};
-  const maxItems = ${limit ?? 'Infinity'};
-  
-  function extractFields(root) {
-    const result = {};
-    
-    for (const [fieldName, selector] of Object.entries(fieldsSchema)) {
-      const el = root.querySelector(selector);
-      if (el) {
-        // Try to get text content, fall back to value for inputs
-        result[fieldName] = el.textContent?.trim() || el.value || '';
-      } else {
-        result[fieldName] = null;
-      }
-    }
-    
-    return result;
-  }
-  
-  if (containerSel) {
-    // Extract array of items
-    const containers = document.querySelectorAll(containerSel);
-    const results = [];
-    
-    for (let i = 0; i < Math.min(containers.length, maxItems); i++) {
-      results.push(extractFields(containers[i]));
-    }
-    
-    return {
-      type: 'array',
-      containerSelector: containerSel,
-      totalContainers: containers.length,
-      extracted: results.length,
-      items: results
-    };
-  } else {
-    // Extract single object
-    return {
-      type: 'object',
-      data: extractFields(document)
-    };
-  }
-})()
-`;
-
-      const result = await page.evaluate(extractCode);
-      response.appendResponseLine(JSON.stringify(result, null, 2));
-    } catch (error) {
-      response.appendResponseLine(
-        `Error extracting structured data: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  },
-});
-
-/**
- * Extract text blocks from page sections.
- */
-export const extractTextBlocks = defineTool({
-  name: 'extract_text_blocks',
-  description:
-    'Extract text content organized by sections (headings and their following content). Useful for article/documentation pages.',
-  annotations: {
-    title: 'Extract Text Blocks',
-    category: ToolCategory.SCRAPING,
-    readOnlyHint: true,
-  },
-  schema: {
-    containerSelector: zod
-      .string()
-      .optional()
-      .default('body')
-      .describe('CSS selector for the main content container (default: "body").'),
-    headingLevel: zod
-      .string()
-      .optional()
-      .default('h1,h2,h3,h4,h5,h6')
-      .describe('Heading selectors to use (default: "h1,h2,h3,h4,h5,h6").'),
-    includeSubheadings: zod
-      .boolean()
-      .optional()
-      .default(true)
-      .describe('Include subheadings within each section (default: true).'),
-  },
-  handler: async (request, response, context) => {
-    const {containerSelector, headingLevel, includeSubheadings} = request.params;
-    const page = context.getSelectedPage();
-
-    try {
-      const extractCode = `
-(function() {
-  const container = document.querySelector(${JSON.stringify(containerSelector)});
-  
-  if (!container) {
-    return { error: 'Container not found: ${containerSelector}' };
-  }
-  
   const headingSelector = ${JSON.stringify(headingLevel)};
   const sections = [];
   let currentSection = null;
-  
+
   function isHeading(el) {
     return el.matches && el.matches(headingSelector);
   }
-  
+
   function walk(node) {
     if (node.nodeType === Node.ELEMENT_NODE) {
       if (isHeading(node)) {
-        // Start a new section
         if (currentSection) {
           sections.push(currentSection);
         }
@@ -450,15 +429,13 @@ export const extractTextBlocks = defineTool({
           subheadings: []
         };
       } else if (currentSection) {
-        // Check for subheadings
         if (${includeSubheadings} && node.matches && node.matches('h1,h2,h3,h4,h5,h6')) {
           currentSection.subheadings.push({
             level: node.tagName.toLowerCase(),
             text: node.textContent?.trim() || ''
           });
         }
-        
-        // Extract text from paragraphs and other block elements
+
         if (node.matches && node.matches('p,li,td,th,blockquote,pre,code,span,div')) {
           const text = node.textContent?.trim();
           if (text && text.length > 0) {
@@ -467,33 +444,39 @@ export const extractTextBlocks = defineTool({
         }
       }
     }
-    
-    // Recursively process child nodes
+
     for (const child of node.childNodes) {
       walk(child);
     }
   }
-  
+
   walk(container);
-  
-  // Don't forget the last section
+
   if (currentSection) {
     sections.push(currentSection);
   }
-  
+
   return {
-    containerSelector: ${JSON.stringify(containerSelector)},
+    type: 'textBlocks',
+    containerSelector: containerSelector,
     sectionCount: sections.length,
     sections: sections
   };
 })()
 `;
+          break;
+        default:
+          response.appendResponseLine(
+            `Error: unknown extraction type "${resolvedType}".`,
+          );
+          return;
+      }
 
       const result = await page.evaluate(extractCode);
       response.appendResponseLine(JSON.stringify(result, null, 2));
     } catch (error) {
       response.appendResponseLine(
-        `Error extracting text blocks: ${error instanceof Error ? error.message : String(error)}`,
+        `Error extracting content: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   },
@@ -708,95 +691,6 @@ export const extractMetadata = defineTool({
     } catch (error) {
       response.appendResponseLine(
         `Error extracting metadata: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  },
-});
-
-/**
- * Click and extract - click an element and extract content after page updates.
- */
-export const clickAndExtract = defineTool({
-  name: 'click_and_extract',
-  description:
-    'Click an element and then extract content after the page updates. Useful for loading more content or navigating tabs.',
-  annotations: {
-    title: 'Click and Extract',
-    category: ToolCategory.SCRAPING,
-    readOnlyHint: false,
-  },
-  schema: {
-    clickSelector: zod
-      .string()
-      .describe('CSS selector for the element to click.'),
-    extractSelector: zod
-      .string()
-      .describe('CSS selector for the content to extract after clicking.'),
-    waitMs: zod
-      .number()
-      .int()
-      .optional()
-      .default(1000)
-      .describe('Milliseconds to wait after clicking before extracting (default: 1000).'),
-    extractAttribute: zod
-      .string()
-      .optional()
-      .describe('Attribute to extract. If not specified, extracts text content.'),
-  },
-  handler: async (request, response, context) => {
-    const {clickSelector, extractSelector, waitMs, extractAttribute} = request.params;
-    const page = context.getSelectedPage();
-
-    try {
-      // Click the element
-      const clickElement = await page.$(clickSelector);
-      if (!clickElement) {
-        response.appendResponseLine(`Error: Element not found: ${clickSelector}`);
-        return;
-      }
-
-      await clickElement.click();
-
-      // Wait for the specified time
-      await new Promise(resolve => setTimeout(resolve, waitMs));
-
-      // Extract content
-      const extractCode = `
-(function() {
-  const elements = document.querySelectorAll(${JSON.stringify(extractSelector)});
-  const results = [];
-  
-  elements.forEach((el, i) => {
-    let value;
-    if (${JSON.stringify(extractAttribute)}) {
-      value = el.getAttribute(${JSON.stringify(extractAttribute)});
-    } else {
-      value = el.textContent?.trim();
-    }
-    
-    if (value) {
-      results.push({
-        index: i,
-        value: value
-      });
-    }
-  });
-  
-  return {
-    clickedSelector: ${JSON.stringify(clickSelector)},
-    extractedSelector: ${JSON.stringify(extractSelector)},
-    waitMs: ${waitMs},
-    count: results.length,
-    results: results
-  };
-})()
-`;
-
-      const result = await page.evaluate(extractCode);
-      response.appendResponseLine(JSON.stringify(result, null, 2));
-    } catch (error) {
-      response.appendResponseLine(
-        `Error in click and extract: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   },
