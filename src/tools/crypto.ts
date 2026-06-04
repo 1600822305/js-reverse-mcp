@@ -24,7 +24,7 @@ import {defineTool} from './ToolDefinition.js';
 export const detectEncryption = defineTool({
   name: 'detect_encryption',
   description:
-    'Detects encryption algorithms, crypto libraries, and encoding methods. Set scope to scan runtime page globals, loaded script sources for crypto function definitions, or both (default).',
+    'Detects encryption algorithms, crypto libraries, and encoding methods. By default (scope="page") scans runtime page globals; set scope to "scripts" or "both" to also search loaded script sources for crypto function definitions.',
   annotations: {
     title: 'Detect Encryption',
     category: ToolCategory.REVERSE_ENGINEERING,
@@ -34,9 +34,9 @@ export const detectEncryption = defineTool({
     scope: zod
       .enum(['page', 'scripts', 'both'])
       .optional()
-      .default('both')
+      .default('page')
       .describe(
-        'What to scan: "page" = runtime global objects/patterns, "scripts" = crypto function definitions in loaded script sources, "both" = run both (default).',
+        'What to scan: "page" = runtime global objects/patterns (fast, default), "scripts" = crypto function definitions in loaded script sources (scans every loaded script), "both" = run both.',
       ),
     deep: zod
       .boolean()
@@ -410,42 +410,52 @@ export const detectEncryption = defineTool({
         '🔍 Searching script sources for crypto-related functions...\n',
       );
 
-      for (const keyword of searchKeywords) {
-        try {
-          const patterns = [
-            `function.*${keyword}`,
-            `${keyword}.*=.*function`,
-            `${keyword}.*=>`,
-            `\\.${keyword}\\s*=`,
-          ];
+      // Combine all keywords into a single alternation so each structural
+      // pattern is one search instead of one-per-keyword. searchInScripts
+      // already scans every loaded script, so collapsing 14 keywords x 4
+      // patterns (56 full passes) down to 4 — run concurrently — is the
+      // main speedup here.
+      const kwAlt = searchKeywords
+        .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+      const lowerKeywords = searchKeywords.map(k => k.toLowerCase());
+      const patterns = [
+        `function.*(${kwAlt})`,
+        `(${kwAlt}).*=.*function`,
+        `(${kwAlt}).*=>`,
+        `\\.(${kwAlt})\\s*=`,
+      ];
 
-          for (const pattern of patterns) {
-            const result = await debugger_.searchInScripts(pattern, {
-              caseSensitive: false,
-              isRegex: true,
-            });
+      const searchResults = await Promise.all(
+        patterns.map(pattern =>
+          debugger_
+            .searchInScripts(pattern, {caseSensitive: false, isRegex: true})
+            .then(r => r.matches)
+            .catch(() => []),
+        ),
+      );
 
-            for (const match of result.matches.slice(0, maxResults)) {
-              if (match.lineContent.length > 500) continue;
+      for (const matches of searchResults) {
+        for (const match of matches.slice(0, maxResults)) {
+          if (match.lineContent.length > 500) continue;
 
-              const exists = allResults.some(
-                r =>
-                  r.scriptId === match.scriptId &&
-                  r.lineNumber === match.lineNumber,
-              );
-              if (exists) continue;
+          const exists = allResults.some(
+            r =>
+              r.scriptId === match.scriptId &&
+              r.lineNumber === match.lineNumber,
+          );
+          if (exists) continue;
 
-              allResults.push({
-                keyword,
-                scriptId: match.scriptId,
-                url: match.url || '(inline)',
-                lineNumber: match.lineNumber,
-                preview: match.lineContent.trim().substring(0, 150),
-              });
-            }
-          }
-        } catch {
-          // Continue with other keywords
+          const lc = match.lineContent.toLowerCase();
+          const keyword = lowerKeywords.find(k => lc.includes(k)) || 'crypto';
+
+          allResults.push({
+            keyword,
+            scriptId: match.scriptId,
+            url: match.url || '(inline)',
+            lineNumber: match.lineNumber,
+            preview: match.lineContent.trim().substring(0, 150),
+          });
         }
       }
 

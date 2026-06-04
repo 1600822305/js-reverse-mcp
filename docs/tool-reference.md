@@ -417,14 +417,14 @@ in the DevTools Elements panel (if any).
 
 ### `detect_encryption`
 
-**Description:** Detects encryption algorithms, crypto libraries, and encoding methods. Set scope to scan runtime page globals, loaded script sources for crypto function definitions, or both (default).
+**Description:** Detects encryption algorithms, crypto libraries, and encoding methods. By default (scope="page") scans runtime page globals; set scope to "scripts" or "both" to also search loaded script sources for crypto function definitions.
 
 **Parameters:**
 
 - **deep** (boolean) _(optional)_: For the page scan: perform deep scan including all object properties (slower but more thorough).
 - **keywords** (array) _(optional)_: For the scripts scan: custom keywords to search for. Defaults to common crypto terms.
 - **maxResults** (integer) _(optional)_: For the scripts scan: maximum number of results per keyword (default: 30).
-- **scope** (enum: "page", "scripts", "both") _(optional)_: What to scan: "page" = runtime global objects/patterns, "scripts" = crypto function definitions in loaded script sources, "both" = run both (default).
+- **scope** (enum: "page", "scripts", "both") _(optional)_: What to scan: "page" = runtime global objects/patterns (fast, default), "scripts" = crypto function definitions in loaded script sources (scans every loaded script), "both" = run both.
 
 ---
 

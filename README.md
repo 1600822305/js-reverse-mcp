@@ -199,11 +199,11 @@ claude mcp add js-reverse node /你的路径/js-reverse-mcp/build/src/index.js
 
 ### 加密检测与分析
 
-| 工具                     | 描述                                                                                         |
-| ------------------------ | -------------------------------------------------------------------------------------------- |
-| `detect_encryption`      | 检测加密库/算法/编码：`scope` 可选 page(运行时全局)/scripts(脚本源码中的加密函数)/both(默认) |
-| `analyze_encoded_string` | 分析字符串的编码类型（Base64/Hex/JWT/URL 编码等）并解码                                      |
-| `hook_crypto_functions`  | 自动 Hook CryptoJS、JSEncrypt、Web Crypto API 等常见加密库                                   |
+| 工具                     | 描述                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `detect_encryption`      | 检测加密库/算法/编码：`scope` 可选 page(运行时全局，默认)/scripts(扫描所有脚本源码中的加密函数)/both |
+| `analyze_encoded_string` | 分析字符串的编码类型（Base64/Hex/JWT/URL 编码等）并解码                                              |
+| `hook_crypto_functions`  | 自动 Hook CryptoJS、JSEncrypt、Web Crypto API 等常见加密库                                           |
 
 ### 反混淆
 
