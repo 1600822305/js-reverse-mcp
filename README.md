@@ -184,8 +184,6 @@ claude mcp add js-reverse node /你的路径/js-reverse-mcp/build/src/index.js
 | `list_tokens`        | 列出所有已保存的 Token                                                      |
 | `set_active_token`   | 设置当前活动 Token                                                          |
 | `delete_token`       | 删除已保存的 Token                                                          |
-| `extract_page_token` | 从当前页面自动提取认证 Token（扫描 React Fiber 状态、Cookie、localStorage） |
-| `firebase_login`     | 使用邮箱/密码通过 Firebase Auth 登录并保存 Token                            |
 
 ### Protobuf / gRPC
 
@@ -302,13 +300,6 @@ hook_function "XMLHttpRequest.prototype.open" → 同时监控 XHR
 ```
 1. list_network_requests → 找到 content-type: application/proto 的请求
 2. decode_protobuf url="https://..." → 直接请求并解码响应
-```
-
-### 自动化登录并复用 Token
-
-```
-1. firebase_login email="user@example.com" password="..." saveName="myAccount"
-2. api_request url="/api/data" method="GET" → 自动携带 Token
 ```
 
 ### 代码覆盖率分析
