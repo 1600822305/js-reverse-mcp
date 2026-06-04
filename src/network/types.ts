@@ -19,6 +19,12 @@ export interface CapturedRequest {
   url: string;
   method: string;
   resourceType?: string;
+  /**
+   * Redirect hops that preceded the final request. CDP reuses one
+   * `RequestId` across a redirect chain, so each intermediate 3xx is recorded
+   * here instead of being overwritten.
+   */
+  redirects?: Array<{url: string; status: number; statusText?: string}>;
   requestHeaders: Record<string, string>;
   requestBody?: string;
   status?: number;

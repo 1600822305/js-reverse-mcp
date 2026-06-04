@@ -86,17 +86,16 @@ export class InterceptRegistry {
     if (!client) {
       return;
     }
-    if (this.#rules.size === 0) {
-      if (this.#fetchEnabled) {
-        await client.send('Fetch.disable').catch(() => undefined);
-        this.#fetchEnabled = false;
-      }
-      return;
-    }
-    // De-duplicate (urlPattern, stage) pairs across all rules.
+    // De-duplicate (urlPattern, stage) pairs across all *active* rules.
+    // `continue` rules are observe-only and handled passively by the request
+    // store, so they emit no Fetch pattern (avoids interception latency) and
+    // never participate in dispatch.
     const seen = new Set<string>();
     const patterns: Protocol.Fetch.RequestPattern[] = [];
     for (const rule of this.#rules.values()) {
+      if (rule.action === 'continue') {
+        continue;
+      }
       const urlPattern = toCdpUrlPattern(rule.urlPattern, rule.isRegex);
       const key = `${urlPattern}\u0000${rule.stage}`;
       if (seen.has(key)) {
@@ -104,6 +103,13 @@ export class InterceptRegistry {
       }
       seen.add(key);
       patterns.push({urlPattern, requestStage: rule.stage});
+    }
+    if (patterns.length === 0) {
+      if (this.#fetchEnabled) {
+        await client.send('Fetch.disable').catch(() => undefined);
+        this.#fetchEnabled = false;
+      }
+      return;
     }
     await client.send('Fetch.enable', {patterns});
     this.#fetchEnabled = true;
@@ -116,6 +122,11 @@ export class InterceptRegistry {
     resourceType: string,
   ): NetworkRule | undefined {
     for (const rule of this.#rules.values()) {
+      // `continue` rules are observe-only: they emit no Fetch pattern and must
+      // not shadow a real action rule that caused this pause.
+      if (rule.action === 'continue') {
+        continue;
+      }
       if (rule.stage !== stage) {
         continue;
       }
@@ -232,17 +243,23 @@ export class InterceptRegistry {
             await passThrough();
             break;
           }
-          let body = rule.responseBody;
-          if (body === undefined) {
+          // Body is always forwarded to CDP base64-encoded. When the caller
+          // does not supply a replacement we reuse the original body verbatim,
+          // preserving binary payloads (images, protobuf) instead of mangling
+          // them through a UTF-8 round-trip.
+          let bodyBase64: string;
+          if (rule.responseBody !== undefined) {
+            bodyBase64 = Buffer.from(rule.responseBody).toString('base64');
+          } else {
             try {
               const current = await client.send('Fetch.getResponseBody', {
                 requestId,
               });
-              body = current.base64Encoded
-                ? Buffer.from(current.body, 'base64').toString('utf8')
-                : current.body;
+              bodyBase64 = current.base64Encoded
+                ? current.body
+                : Buffer.from(current.body).toString('base64');
             } catch {
-              body = '';
+              bodyBase64 = '';
             }
           }
           const headers = {
@@ -260,7 +277,7 @@ export class InterceptRegistry {
             responseCode:
               rule.responseStatus ?? event.responseStatusCode ?? 200,
             responseHeaders: recordToHeaderEntries(headers),
-            body: Buffer.from(body).toString('base64'),
+            body: bodyBase64,
           });
           rule.stats.modified++;
           break;

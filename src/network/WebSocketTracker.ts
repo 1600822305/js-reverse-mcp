@@ -159,8 +159,15 @@ export class WebSocketTracker {
       ) {
         return false;
       }
-      if (opts.contains && !f.payload.includes(opts.contains)) {
-        return false;
+      if (opts.contains) {
+        // Binary frame payloads are stored base64-encoded; decode best-effort
+        // so the substring search runs against the actual frame contents.
+        const text = f.base64
+          ? Buffer.from(f.payload, 'base64').toString('utf8')
+          : f.payload;
+        if (!text.includes(opts.contains)) {
+          return false;
+        }
       }
       return true;
     });
