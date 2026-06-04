@@ -8,9 +8,9 @@
  * Encryption Detection Tools
  *
  * Tools for detecting and analyzing encryption/encoding in JavaScript:
- * - Detect common encryption algorithms
- * - Find crypto-related functions
+ * - Detect common encryption algorithms (page globals and/or script sources)
  * - Analyze encoded strings
+ * - Hook common crypto library functions
  */
 
 import {zod} from '../third_party/index.js';
@@ -24,23 +24,46 @@ import {defineTool} from './ToolDefinition.js';
 export const detectEncryption = defineTool({
   name: 'detect_encryption',
   description:
-    'Detects common encryption algorithms, crypto libraries, and encoding methods used in the page. Scans global objects, function names, and common patterns.',
+    'Detects encryption algorithms, crypto libraries, and encoding methods. Set scope to scan runtime page globals, loaded script sources for crypto function definitions, or both (default).',
   annotations: {
     title: 'Detect Encryption',
     category: ToolCategory.REVERSE_ENGINEERING,
     readOnlyHint: true,
   },
   schema: {
+    scope: zod
+      .enum(['page', 'scripts', 'both'])
+      .optional()
+      .default('both')
+      .describe(
+        'What to scan: "page" = runtime global objects/patterns, "scripts" = crypto function definitions in loaded script sources, "both" = run both (default).',
+      ),
     deep: zod
       .boolean()
       .optional()
       .default(false)
       .describe(
-        'Perform deep scan including all object properties (slower but more thorough).',
+        'For the page scan: perform deep scan including all object properties (slower but more thorough).',
+      ),
+    keywords: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'For the scripts scan: custom keywords to search for. Defaults to common crypto terms.',
+      ),
+    maxResults: zod
+      .number()
+      .int()
+      .optional()
+      .default(30)
+      .describe(
+        'For the scripts scan: maximum number of results per keyword (default: 30).',
       ),
   },
   handler: async (request, response, context) => {
-    const {deep} = request.params;
+    const {deep, scope, keywords, maxResults} = request.params;
+    const scanPage = scope !== 'scripts';
+    const scanScripts = scope !== 'page';
 
     const detectCode = `
 (function() {
@@ -234,279 +257,243 @@ export const detectEncryption = defineTool({
 })();
 `;
 
-    try {
-      const page = context.getSelectedPage();
-      const result = (await page.evaluate(detectCode)) as {
-        libraries: string[];
-        algorithms: string[];
-        suspiciousFunctions: Array<{
-          path: string;
-          keyword: string;
-          type: string;
-          preview?: string;
-          keys?: string[];
-        }>;
-        encodedStrings: Array<{
-          path: string;
-          type: string;
-          preview: string;
-          length: number;
-        }>;
-      };
-
-      response.appendResponseLine('🔐 Encryption Detection Results\n');
-
-      // Libraries
-      if (result.libraries.length > 0) {
-        response.appendResponseLine(
-          `📚 Detected Crypto Libraries (${result.libraries.length}):`,
-        );
-        for (const lib of result.libraries) {
-          response.appendResponseLine(`  ✓ ${lib}`);
-        }
-        response.appendResponseLine('');
-      } else {
-        response.appendResponseLine('📚 No known crypto libraries detected.\n');
-      }
-
-      // Algorithms
-      if (result.algorithms.length > 0) {
-        response.appendResponseLine(
-          `🔢 Detected Algorithms (${result.algorithms.length}):`,
-        );
-        response.appendResponseLine(`  ${result.algorithms.join(', ')}`);
-        response.appendResponseLine('');
-      }
-
-      // Suspicious functions
-      if (result.suspiciousFunctions.length > 0) {
-        response.appendResponseLine(
-          `🔍 Suspicious Functions/Objects (${result.suspiciousFunctions.length}):`,
-        );
-        for (const func of result.suspiciousFunctions.slice(0, 20)) {
-          response.appendResponseLine(`  - ${func.path} [${func.keyword}]`);
-          if (func.preview) {
-            response.appendResponseLine(`    ${func.preview}`);
-          }
-          if (func.keys) {
-            response.appendResponseLine(`    Keys: ${func.keys.join(', ')}`);
-          }
-        }
-        if (result.suspiciousFunctions.length > 20) {
-          response.appendResponseLine(
-            `  ... and ${result.suspiciousFunctions.length - 20} more`,
-          );
-        }
-        response.appendResponseLine('');
-      }
-
-      // Encoded strings
-      if (result.encodedStrings.length > 0) {
-        response.appendResponseLine(
-          `📝 Encoded Strings Found (${result.encodedStrings.length}):`,
-        );
-        for (const str of result.encodedStrings) {
-          response.appendResponseLine(
-            `  - ${str.path} [${str.type}, ${str.length} chars]`,
-          );
-          response.appendResponseLine(`    ${str.preview}`);
-        }
-        response.appendResponseLine('');
-      }
-
-      // Summary
-      const hasFindings =
-        result.libraries.length > 0 ||
-        result.suspiciousFunctions.length > 0 ||
-        result.encodedStrings.length > 0;
-
-      if (!hasFindings) {
-        response.appendResponseLine('No obvious encryption patterns found.');
-        response.appendResponseLine(
-          'Try: search_in_sources with patterns like "encrypt", "sign", "hash"',
-        );
-      } else {
-        response.appendResponseLine('💡 Tips:');
-        response.appendResponseLine(
-          '  - Use hook_function to monitor calls to suspicious functions',
-        );
-        response.appendResponseLine(
-          '  - Use set_breakpoint_on_text to debug encryption code',
-        );
-        response.appendResponseLine(
-          '  - Use inspect_object to examine crypto library structure',
-        );
-      }
-    } catch (error) {
-      response.appendResponseLine(
-        `Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  },
-});
-
-/**
- * Find crypto-related functions in script sources.
- */
-export const findCryptoFunctions = defineTool({
-  name: 'find_crypto_functions',
-  description:
-    'Searches all loaded scripts for crypto-related function definitions. Finds functions containing encrypt, decrypt, hash, sign, etc.',
-  annotations: {
-    title: 'Find Crypto Functions',
-    category: ToolCategory.REVERSE_ENGINEERING,
-    readOnlyHint: true,
-  },
-  schema: {
-    keywords: zod
-      .array(zod.string())
-      .optional()
-      .describe(
-        'Custom keywords to search for. Defaults to common crypto terms.',
-      ),
-    maxResults: zod
-      .number()
-      .int()
-      .optional()
-      .default(30)
-      .describe('Maximum number of results per keyword (default: 30).'),
-  },
-  handler: async (request, response, context) => {
-    const {keywords, maxResults} = request.params;
-
-    const debugger_ = context.debuggerContext;
-
-    if (!debugger_.isEnabled()) {
-      response.appendResponseLine(
-        'Debugger is not enabled. Please select a page first.',
-      );
-      return;
-    }
-
-    const searchKeywords = keywords || [
-      'encrypt',
-      'decrypt',
-      'sign',
-      'verify',
-      'hash',
-      'md5',
-      'sha',
-      'aes',
-      'rsa',
-      'cipher',
-      'hmac',
-      'pbkdf',
-      'token',
-      'secret',
-    ];
-
-    const allResults: Array<{
-      keyword: string;
-      scriptId: string;
-      url: string;
-      lineNumber: number;
-      preview: string;
-    }> = [];
-
-    response.appendResponseLine(
-      '🔍 Searching for crypto-related functions...\n',
-    );
-
-    for (const keyword of searchKeywords) {
+    if (scanPage) {
       try {
-        // Search for function definitions
-        const patterns = [
-          `function.*${keyword}`,
-          `${keyword}.*=.*function`,
-          `${keyword}.*=>`,
-          `\\.${keyword}\\s*=`,
-        ];
+        const page = context.getSelectedPage();
+        const result = (await page.evaluate(detectCode)) as {
+          libraries: string[];
+          algorithms: string[];
+          suspiciousFunctions: Array<{
+            path: string;
+            keyword: string;
+            type: string;
+            preview?: string;
+            keys?: string[];
+          }>;
+          encodedStrings: Array<{
+            path: string;
+            type: string;
+            preview: string;
+            length: number;
+          }>;
+        };
 
-        for (const pattern of patterns) {
-          const result = await debugger_.searchInScripts(pattern, {
-            caseSensitive: false,
-            isRegex: true,
-          });
+        response.appendResponseLine('🔐 Encryption Detection Results\n');
 
-          for (const match of result.matches.slice(0, maxResults)) {
-            // Skip very long lines (minified)
-            if (match.lineContent.length > 500) continue;
-
-            // Avoid duplicates
-            const exists = allResults.some(
-              r =>
-                r.scriptId === match.scriptId &&
-                r.lineNumber === match.lineNumber,
-            );
-            if (exists) continue;
-
-            allResults.push({
-              keyword,
-              scriptId: match.scriptId,
-              url: match.url || '(inline)',
-              lineNumber: match.lineNumber,
-              preview: match.lineContent.trim().substring(0, 150),
-            });
+        // Libraries
+        if (result.libraries.length > 0) {
+          response.appendResponseLine(
+            `📚 Detected Crypto Libraries (${result.libraries.length}):`,
+          );
+          for (const lib of result.libraries) {
+            response.appendResponseLine(`  ✓ ${lib}`);
           }
+          response.appendResponseLine('');
+        } else {
+          response.appendResponseLine(
+            '📚 No known crypto libraries detected.\n',
+          );
         }
-      } catch {
-        // Continue with other keywords
-      }
-    }
 
-    if (allResults.length === 0) {
-      response.appendResponseLine(
-        'No crypto-related functions found in scripts.',
-      );
-      response.appendResponseLine('');
-      response.appendResponseLine('Try:');
-      response.appendResponseLine(
-        '  - detect_encryption to check for crypto libraries',
-      );
-      response.appendResponseLine(
-        '  - list_globals with filter "encrypt" or "sign"',
-      );
-      return;
-    }
+        // Algorithms
+        if (result.algorithms.length > 0) {
+          response.appendResponseLine(
+            `🔢 Detected Algorithms (${result.algorithms.length}):`,
+          );
+          response.appendResponseLine(`  ${result.algorithms.join(', ')}`);
+          response.appendResponseLine('');
+        }
 
-    // Group by URL
-    const byUrl: Record<string, typeof allResults> = {};
-    for (const r of allResults) {
-      const key = r.url;
-      if (!byUrl[key]) byUrl[key] = [];
-      byUrl[key].push(r);
-    }
+        // Suspicious functions
+        if (result.suspiciousFunctions.length > 0) {
+          response.appendResponseLine(
+            `🔍 Suspicious Functions/Objects (${result.suspiciousFunctions.length}):`,
+          );
+          for (const func of result.suspiciousFunctions.slice(0, 20)) {
+            response.appendResponseLine(`  - ${func.path} [${func.keyword}]`);
+            if (func.preview) {
+              response.appendResponseLine(`    ${func.preview}`);
+            }
+            if (func.keys) {
+              response.appendResponseLine(`    Keys: ${func.keys.join(', ')}`);
+            }
+          }
+          if (result.suspiciousFunctions.length > 20) {
+            response.appendResponseLine(
+              `  ... and ${result.suspiciousFunctions.length - 20} more`,
+            );
+          }
+          response.appendResponseLine('');
+        }
 
-    response.appendResponseLine(
-      `Found ${allResults.length} potential crypto function(s):\n`,
-    );
+        // Encoded strings
+        if (result.encodedStrings.length > 0) {
+          response.appendResponseLine(
+            `📝 Encoded Strings Found (${result.encodedStrings.length}):`,
+          );
+          for (const str of result.encodedStrings) {
+            response.appendResponseLine(
+              `  - ${str.path} [${str.type}, ${str.length} chars]`,
+            );
+            response.appendResponseLine(`    ${str.preview}`);
+          }
+          response.appendResponseLine('');
+        }
 
-    for (const [url, matches] of Object.entries(byUrl)) {
-      const shortUrl =
-        url.length > 60 ? '...' + url.substring(url.length - 57) : url;
-      response.appendResponseLine(`📄 ${shortUrl}`);
+        // Summary
+        const hasFindings =
+          result.libraries.length > 0 ||
+          result.suspiciousFunctions.length > 0 ||
+          result.encodedStrings.length > 0;
 
-      for (const m of matches.slice(0, 10)) {
+        if (!hasFindings) {
+          response.appendResponseLine('No obvious encryption patterns found.');
+          response.appendResponseLine(
+            'Try: search_in_sources with patterns like "encrypt", "sign", "hash"',
+          );
+        } else {
+          response.appendResponseLine('💡 Tips:');
+          response.appendResponseLine(
+            '  - Use hook_function to monitor calls to suspicious functions',
+          );
+          response.appendResponseLine(
+            '  - Use set_breakpoint_on_text to debug encryption code',
+          );
+          response.appendResponseLine(
+            '  - Use inspect_object to examine crypto library structure',
+          );
+        }
+      } catch (error) {
         response.appendResponseLine(
-          `   Line ${m.lineNumber + 1} [${m.keyword}]: ${m.preview}`,
+          `Error: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-      if (matches.length > 10) {
-        response.appendResponseLine(`   ... and ${matches.length - 10} more`);
-      }
-      response.appendResponseLine('');
     }
 
-    response.appendResponseLine('💡 Tips:');
-    response.appendResponseLine(
-      '  - Use get_script_source(scriptId, startLine, endLine) to see full context',
-    );
-    response.appendResponseLine(
-      '  - Use set_breakpoint to debug specific functions',
-    );
-    response.appendResponseLine(
-      '  - Use hook_function to monitor function calls',
-    );
+    if (scanScripts) {
+      const debugger_ = context.debuggerContext;
+      if (!debugger_.isEnabled()) {
+        response.appendResponseLine('');
+        response.appendResponseLine(
+          'ℹ️ Script source scan skipped: debugger not enabled (select a page first).',
+        );
+        return;
+      }
+
+      const searchKeywords = keywords || [
+        'encrypt',
+        'decrypt',
+        'sign',
+        'verify',
+        'hash',
+        'md5',
+        'sha',
+        'aes',
+        'rsa',
+        'cipher',
+        'hmac',
+        'pbkdf',
+        'token',
+        'secret',
+      ];
+
+      const allResults: Array<{
+        keyword: string;
+        scriptId: string;
+        url: string;
+        lineNumber: number;
+        preview: string;
+      }> = [];
+
+      response.appendResponseLine('');
+      response.appendResponseLine(
+        '🔍 Searching script sources for crypto-related functions...\n',
+      );
+
+      for (const keyword of searchKeywords) {
+        try {
+          const patterns = [
+            `function.*${keyword}`,
+            `${keyword}.*=.*function`,
+            `${keyword}.*=>`,
+            `\\.${keyword}\\s*=`,
+          ];
+
+          for (const pattern of patterns) {
+            const result = await debugger_.searchInScripts(pattern, {
+              caseSensitive: false,
+              isRegex: true,
+            });
+
+            for (const match of result.matches.slice(0, maxResults)) {
+              if (match.lineContent.length > 500) continue;
+
+              const exists = allResults.some(
+                r =>
+                  r.scriptId === match.scriptId &&
+                  r.lineNumber === match.lineNumber,
+              );
+              if (exists) continue;
+
+              allResults.push({
+                keyword,
+                scriptId: match.scriptId,
+                url: match.url || '(inline)',
+                lineNumber: match.lineNumber,
+                preview: match.lineContent.trim().substring(0, 150),
+              });
+            }
+          }
+        } catch {
+          // Continue with other keywords
+        }
+      }
+
+      if (allResults.length === 0) {
+        response.appendResponseLine(
+          'No crypto-related functions found in scripts.',
+        );
+        return;
+      }
+
+      const byUrl: Record<string, typeof allResults> = {};
+      for (const r of allResults) {
+        const key = r.url;
+        if (!byUrl[key]) byUrl[key] = [];
+        byUrl[key].push(r);
+      }
+
+      response.appendResponseLine(
+        `Found ${allResults.length} potential crypto function(s):\n`,
+      );
+
+      for (const [url, matches] of Object.entries(byUrl)) {
+        const shortUrl =
+          url.length > 60 ? '...' + url.substring(url.length - 57) : url;
+        response.appendResponseLine(`📄 ${shortUrl}`);
+
+        for (const m of matches.slice(0, 10)) {
+          response.appendResponseLine(
+            `   Line ${m.lineNumber + 1} [${m.keyword}]: ${m.preview}`,
+          );
+        }
+        if (matches.length > 10) {
+          response.appendResponseLine(`   ... and ${matches.length - 10} more`);
+        }
+        response.appendResponseLine('');
+      }
+
+      response.appendResponseLine('💡 Tips:');
+      response.appendResponseLine(
+        '  - Use get_script_source(scriptId, startLine, endLine) to see full context',
+      );
+      response.appendResponseLine(
+        '  - Use set_breakpoint to debug specific functions',
+      );
+      response.appendResponseLine(
+        '  - Use hook_function to monitor function calls',
+      );
+    }
   },
 });
 

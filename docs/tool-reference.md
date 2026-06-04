@@ -23,21 +23,19 @@
   - [`list_console_messages`](#list_console_messages)
   - [`take_screenshot`](#take_screenshot)
   - [`take_snapshot`](#take_snapshot)
-- **[JS Reverse Engineering](#js-reverse-engineering)** (59 tools)
+- **[JS Reverse Engineering](#js-reverse-engineering)** (57 tools)
   - [`analyze_encoded_string`](#analyze_encoded_string)
   - [`beautify_script`](#beautify_script)
   - [`break_on_attribute_modified`](#break_on_attribute_modified)
   - [`break_on_node_removed`](#break_on_node_removed)
   - [`break_on_subtree_modified`](#break_on_subtree_modified)
   - [`break_on_xhr`](#break_on_xhr)
-  - [`decode_network_protobuf`](#decode_network_protobuf)
   - [`decode_protobuf`](#decode_protobuf)
   - [`decrypt_strings`](#decrypt_strings)
   - [`detect_encryption`](#detect_encryption)
   - [`diff_globals`](#diff_globals)
   - [`encode_protobuf`](#encode_protobuf)
   - [`evaluate_on_callframe`](#evaluate_on_callframe)
-  - [`find_crypto_functions`](#find_crypto_functions)
   - [`find_in_script`](#find_in_script)
   - [`get_paused_info`](#get_paused_info)
   - [`get_request_initiator`](#get_request_initiator)
@@ -386,31 +384,21 @@ in the DevTools Elements panel (if any).
 
 ---
 
-### `decode_network_protobuf`
-
-**Description:** Fetch a URL and decode the response as protobuf binary. Useful for inspecting gRPC-Connect API responses that use application/proto or application/connect+proto content type.
-
-**Parameters:**
-
-- **body** (string) _(optional)_: Request body (hex-encoded protobuf or JSON string).
-- **bodyFormat** (enum: "hex", "json", "raw") _(optional)_: Format of the request body.
-- **headers** (object) _(optional)_: Custom headers.
-- **maxDepth** (integer) _(optional)_: Maximum depth for nested message decoding (default: 3).
-- **method** (enum: "GET", "POST") _(optional)_: HTTP method (default: POST).
-- **skipBytes** (integer) _(optional)_: Number of bytes to skip at the start of response (e.g. 5 for gRPC-Connect frame header).
-- **url** (string) **(required)**: URL to fetch.
-
----
-
 ### `decode_protobuf`
 
-**Description:** Decode raw protobuf binary data without a .proto schema. Analyzes wire format to extract field numbers, types, and values. Supports nested messages, strings, integers, and floating point. Input can be hex string or base64.
+**Description:** Decode protobuf binary without a .proto schema. Provide inline data (hex/base64) OR a url to fetch and decode (e.g. gRPC-Connect responses). Analyzes wire format to extract field numbers, types, and values, including nested messages.
 
 **Parameters:**
 
-- **data** (string) **(required)**: Protobuf data as hex string (e.g. "0a0548656c6c6f") or base64 string.
-- **format** (enum: "hex", "base64", "auto") _(optional)_: Input format (default: auto-detect).
+- **body** (string) _(optional)_: Request body when fetching url (hex-encoded protobuf or JSON).
+- **bodyFormat** (enum: "hex", "json", "raw") _(optional)_: Format of the request body when fetching url.
+- **data** (string) _(optional)_: Protobuf data as hex string (e.g. "0a0548656c6c6f") or base64 string. Provide either data or url.
+- **format** (enum: "hex", "base64", "auto") _(optional)_: Input format for data (default: auto-detect).
+- **headers** (object) _(optional)_: Custom headers when fetching url.
 - **maxDepth** (integer) _(optional)_: Maximum depth for nested message decoding (default: 3).
+- **method** (enum: "GET", "POST") _(optional)_: HTTP method when fetching url (default: POST).
+- **skipBytes** (integer) _(optional)_: Number of bytes to skip at the start of the fetched response (e.g. 5 for gRPC-Connect frame header).
+- **url** (string) _(optional)_: URL to fetch and decode the response as protobuf (gRPC-Connect/application/proto). Provide either data or url.
 
 ---
 
@@ -429,11 +417,14 @@ in the DevTools Elements panel (if any).
 
 ### `detect_encryption`
 
-**Description:** Detects common encryption algorithms, crypto libraries, and encoding methods used in the page. Scans global objects, function names, and common patterns.
+**Description:** Detects encryption algorithms, crypto libraries, and encoding methods. Set scope to scan runtime page globals, loaded script sources for crypto function definitions, or both (default).
 
 **Parameters:**
 
-- **deep** (boolean) _(optional)_: Perform deep scan including all object properties (slower but more thorough).
+- **deep** (boolean) _(optional)_: For the page scan: perform deep scan including all object properties (slower but more thorough).
+- **keywords** (array) _(optional)_: For the scripts scan: custom keywords to search for. Defaults to common crypto terms.
+- **maxResults** (integer) _(optional)_: For the scripts scan: maximum number of results per keyword (default: 30).
+- **scope** (enum: "page", "scripts", "both") _(optional)_: What to scan: "page" = runtime global objects/patterns, "scripts" = crypto function definitions in loaded script sources, "both" = run both (default).
 
 ---
 
@@ -466,17 +457,6 @@ in the DevTools Elements panel (if any).
 
 - **expression** (string) **(required)**: The JavaScript expression to evaluate.
 - **frameIndex** (integer) _(optional)_: The call frame index to evaluate in (0 = top frame, default: 0).
-
----
-
-### `find_crypto_functions`
-
-**Description:** Searches all loaded scripts for crypto-related function definitions. Finds functions containing encrypt, decrypt, hash, sign, etc.
-
-**Parameters:**
-
-- **keywords** (array) _(optional)_: Custom keywords to search for. Defaults to common crypto terms.
-- **maxResults** (integer) _(optional)_: Maximum number of results per keyword (default: 30).
 
 ---
 

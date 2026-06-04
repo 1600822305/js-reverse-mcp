@@ -180,11 +180,10 @@ claude mcp add js-reverse node /你的路径/js-reverse-mcp/build/src/index.js
 
 ### Protobuf / gRPC
 
-| 工具                      | 描述                                             |
-| ------------------------- | ------------------------------------------------ |
-| `encode_protobuf`         | 将字段编码为 Protobuf 二进制（无需 .proto 文件） |
-| `decode_protobuf`         | 解码 Protobuf 二进制数据（支持 Hex/Base64 输入） |
-| `decode_network_protobuf` | 直接请求 URL 并解析 Protobuf/gRPC-Connect 响应   |
+| 工具              | 描述                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| `encode_protobuf` | 将字段编码为 Protobuf 二进制（无需 .proto 文件）                                            |
+| `decode_protobuf` | 解码 Protobuf 二进制：传入 `data`（Hex/Base64）或 `url`（自动请求并解析 gRPC-Connect 响应） |
 
 ### 网页抓取
 
@@ -200,12 +199,11 @@ claude mcp add js-reverse node /你的路径/js-reverse-mcp/build/src/index.js
 
 ### 加密检测与分析
 
-| 工具                     | 描述                                                       |
-| ------------------------ | ---------------------------------------------------------- |
-| `detect_encryption`      | 扫描页面中使用的加密库和算法                               |
-| `find_crypto_functions`  | 在所有脚本中搜索加密相关函数定义                           |
-| `analyze_encoded_string` | 分析字符串的编码类型（Base64/Hex/JWT/URL 编码等）并解码    |
-| `hook_crypto_functions`  | 自动 Hook CryptoJS、JSEncrypt、Web Crypto API 等常见加密库 |
+| 工具                     | 描述                                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
+| `detect_encryption`      | 检测加密库/算法/编码：`scope` 可选 page(运行时全局)/scripts(脚本源码中的加密函数)/both(默认) |
+| `analyze_encoded_string` | 分析字符串的编码类型（Base64/Hex/JWT/URL 编码等）并解码                                      |
+| `hook_crypto_functions`  | 自动 Hook CryptoJS、JSEncrypt、Web Crypto API 等常见加密库                                   |
 
 ### 反混淆
 
@@ -301,7 +299,7 @@ hook_function "XMLHttpRequest.prototype.open" → 同时监控 XHR
 
 ```
 1. list_network_requests → 找到 content-type: application/proto 的请求
-2. decode_network_protobuf url="https://..." → 直接解码响应
+2. decode_protobuf url="https://..." → 直接请求并解码响应
 ```
 
 ### 自动化登录并复用 Token

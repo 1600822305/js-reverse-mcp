@@ -207,7 +207,7 @@ function formatFields(fields: DecodedField[], indent = 0): string {
 export const decodeProtobuf = defineTool({
   name: 'decode_protobuf',
   description:
-    'Decode raw protobuf binary data without a .proto schema. Analyzes wire format to extract field numbers, types, and values. Supports nested messages, strings, integers, and floating point. Input can be hex string or base64.',
+    'Decode protobuf binary without a .proto schema. Provide inline data (hex/base64) OR a url to fetch and decode (e.g. gRPC-Connect responses). Analyzes wire format to extract field numbers, types, and values, including nested messages.',
   annotations: {
     title: 'Decode Protobuf',
     category: ToolCategory.REVERSE_ENGINEERING,
@@ -216,24 +216,167 @@ export const decodeProtobuf = defineTool({
   schema: {
     data: zod
       .string()
+      .optional()
       .describe(
-        'Protobuf data as hex string (e.g. "0a0548656c6c6f") or base64 string.',
+        'Protobuf data as hex string (e.g. "0a0548656c6c6f") or base64 string. Provide either data or url.',
+      ),
+    url: zod
+      .string()
+      .optional()
+      .describe(
+        'URL to fetch and decode the response as protobuf (gRPC-Connect/application/proto). Provide either data or url.',
       ),
     format: zod
       .enum(['hex', 'base64', 'auto'])
       .optional()
       .default('auto')
-      .describe('Input format (default: auto-detect).'),
+      .describe('Input format for data (default: auto-detect).'),
     maxDepth: zod
       .number()
       .int()
       .optional()
       .default(3)
       .describe('Maximum depth for nested message decoding (default: 3).'),
+    method: zod
+      .enum(['GET', 'POST'])
+      .optional()
+      .default('POST')
+      .describe('HTTP method when fetching url (default: POST).'),
+    headers: zod
+      .record(zod.string())
+      .optional()
+      .describe('Custom headers when fetching url.'),
+    body: zod
+      .string()
+      .optional()
+      .describe(
+        'Request body when fetching url (hex-encoded protobuf or JSON).',
+      ),
+    bodyFormat: zod
+      .enum(['hex', 'json', 'raw'])
+      .optional()
+      .default('json')
+      .describe('Format of the request body when fetching url.'),
+    skipBytes: zod
+      .number()
+      .int()
+      .optional()
+      .default(0)
+      .describe(
+        'Number of bytes to skip at the start of the fetched response (e.g. 5 for gRPC-Connect frame header).',
+      ),
   },
-  handler: async (request, response) => {
-    const {data, format, maxDepth} = request.params;
+  handler: async (request, response, context) => {
+    const {format, maxDepth, method, headers, body, bodyFormat, skipBytes} =
+      request.params;
+    let {data} = request.params;
+    const {url} = request.params;
     let bytes: Uint8Array;
+
+    if (!data && !url) {
+      response.appendResponseLine('Error: provide either `data` or `url`.');
+      return;
+    }
+    if (data && url) {
+      response.appendResponseLine(
+        'Error: provide only one of `data` or `url`, not both.',
+      );
+      return;
+    }
+
+    if (url) {
+      const page = context.getSelectedPage();
+      const fetched = await page.evaluate(
+        async (params: {
+          url: string;
+          method: string;
+          headers?: Record<string, string>;
+          body?: string;
+          bodyFormat: string;
+          skipBytes: number;
+        }) => {
+          try {
+            const fetchHeaders: Record<string, string> = params.headers || {};
+
+            let fetchBody: BodyInit | undefined;
+            if (params.body) {
+              if (params.bodyFormat === 'hex') {
+                const hex = params.body.replace(/\s/g, '');
+                const b = new Uint8Array(
+                  hex.match(/.{1,2}/g)!.map(x => parseInt(x, 16)),
+                );
+                fetchBody = b;
+                if (!fetchHeaders['content-type']) {
+                  fetchHeaders['content-type'] = 'application/proto';
+                }
+              } else if (params.bodyFormat === 'json') {
+                fetchBody = params.body;
+                if (!fetchHeaders['content-type']) {
+                  fetchHeaders['content-type'] = 'application/json';
+                }
+              } else {
+                fetchBody = params.body;
+              }
+            }
+
+            const resp = await fetch(params.url, {
+              method: params.method,
+              headers: fetchHeaders,
+              body: fetchBody,
+            });
+
+            const buf = await resp.arrayBuffer();
+            const all = new Uint8Array(buf);
+            const sliced =
+              params.skipBytes > 0 ? all.slice(params.skipBytes) : all;
+            const hex = Array.from(sliced)
+              .map(b => b.toString(16).padStart(2, '0'))
+              .join('');
+
+            return JSON.stringify({
+              status: resp.status,
+              contentType: resp.headers.get('content-type'),
+              totalBytes: all.length,
+              dataBytes: sliced.length,
+              hex,
+            });
+          } catch (e: unknown) {
+            const error = e instanceof Error ? e : new Error(String(e));
+            return JSON.stringify({error: error.message});
+          }
+        },
+        {
+          url,
+          method: method || 'POST',
+          headers,
+          body,
+          bodyFormat: bodyFormat || 'json',
+          skipBytes: skipBytes || 0,
+        },
+      );
+
+      const parsed = JSON.parse(fetched as string);
+      if (parsed.error) {
+        response.appendResponseLine(`❌ Request failed: ${parsed.error}`);
+        return;
+      }
+
+      response.appendResponseLine('## Network Protobuf Response\n');
+      response.appendResponseLine(`Status: ${parsed.status}`);
+      response.appendResponseLine(`Content-Type: ${parsed.contentType}`);
+      response.appendResponseLine(
+        `Total bytes: ${parsed.totalBytes}, Data bytes: ${parsed.dataBytes}`,
+      );
+      response.appendResponseLine('');
+
+      // Continue through the shared decode path using the fetched hex.
+      data = parsed.hex as string;
+    }
+
+    if (data === undefined) {
+      response.appendResponseLine('Error: no protobuf data to decode.');
+      return;
+    }
 
     try {
       const fmt = format === 'auto'
@@ -435,163 +578,6 @@ export const encodeProtobuf = defineTool({
     } catch (e) {
       const error = e instanceof Error ? e : new Error(String(e));
       response.appendResponseLine(`Error encoding protobuf: ${error.message}`);
-    }
-  },
-});
-
-// ==================== Decode Network Response Protobuf ====================
-
-export const decodeNetworkProtobuf = defineTool({
-  name: 'decode_network_protobuf',
-  description:
-    'Fetch a URL and decode the response as protobuf binary. Useful for inspecting gRPC-Connect API responses that use application/proto or application/connect+proto content type.',
-  annotations: {
-    title: 'Decode Network Protobuf',
-    category: ToolCategory.REVERSE_ENGINEERING,
-    readOnlyHint: true,
-  },
-  schema: {
-    url: zod.string().describe('URL to fetch.'),
-    method: zod
-      .enum(['GET', 'POST'])
-      .optional()
-      .default('POST')
-      .describe('HTTP method (default: POST).'),
-    headers: zod
-      .record(zod.string())
-      .optional()
-      .describe('Custom headers.'),
-    body: zod
-      .string()
-      .optional()
-      .describe('Request body (hex-encoded protobuf or JSON string).'),
-    bodyFormat: zod
-      .enum(['hex', 'json', 'raw'])
-      .optional()
-      .default('json')
-      .describe('Format of the request body.'),
-    skipBytes: zod
-      .number()
-      .int()
-      .optional()
-      .default(0)
-      .describe('Number of bytes to skip at the start of response (e.g. 5 for gRPC-Connect frame header).'),
-    maxDepth: zod
-      .number()
-      .int()
-      .optional()
-      .default(3)
-      .describe('Maximum depth for nested message decoding (default: 3).'),
-  },
-  handler: async (request, response, context) => {
-    const {url, method, headers, body, bodyFormat, skipBytes, maxDepth} = request.params;
-    const page = context.getSelectedPage();
-
-    const result = await page.evaluate(
-      async (params: {
-        url: string;
-        method: string;
-        headers?: Record<string, string>;
-        body?: string;
-        bodyFormat: string;
-        skipBytes: number;
-      }) => {
-        try {
-          const fetchHeaders: Record<string, string> = params.headers || {};
-
-          let fetchBody: BodyInit | undefined;
-          if (params.body) {
-            if (params.bodyFormat === 'hex') {
-              const hex = params.body.replace(/\s/g, '');
-              const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(b => parseInt(b, 16)));
-              fetchBody = bytes;
-              if (!fetchHeaders['content-type']) {
-                fetchHeaders['content-type'] = 'application/proto';
-              }
-            } else if (params.bodyFormat === 'json') {
-              fetchBody = params.body;
-              if (!fetchHeaders['content-type']) {
-                fetchHeaders['content-type'] = 'application/json';
-              }
-            } else {
-              fetchBody = params.body;
-            }
-          }
-
-          const resp = await fetch(params.url, {
-            method: params.method,
-            headers: fetchHeaders,
-            body: fetchBody,
-          });
-
-          const buf = await resp.arrayBuffer();
-          const bytes = new Uint8Array(buf);
-
-          // Skip frame header if needed
-          const data = params.skipBytes > 0
-            ? bytes.slice(params.skipBytes)
-            : bytes;
-
-          // Return as hex for decoding on server side
-          const hex = Array.from(data)
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-
-          return JSON.stringify({
-            status: resp.status,
-            contentType: resp.headers.get('content-type'),
-            totalBytes: bytes.length,
-            dataBytes: data.length,
-            hex,
-          });
-        } catch (e: unknown) {
-          const error = e instanceof Error ? e : new Error(String(e));
-          return JSON.stringify({error: error.message});
-        }
-      },
-      {
-        url,
-        method: method || 'POST',
-        headers,
-        body,
-        bodyFormat: bodyFormat || 'json',
-        skipBytes: skipBytes || 0,
-      },
-    );
-
-    const parsed = JSON.parse(result as string);
-
-    if (parsed.error) {
-      response.appendResponseLine(`❌ Request failed: ${parsed.error}`);
-      return;
-    }
-
-    response.appendResponseLine(`## Network Protobuf Response\n`);
-    response.appendResponseLine(`Status: ${parsed.status}`);
-    response.appendResponseLine(`Content-Type: ${parsed.contentType}`);
-    response.appendResponseLine(`Total bytes: ${parsed.totalBytes}, Data bytes: ${parsed.dataBytes}`);
-    response.appendResponseLine('');
-
-    // Decode the protobuf
-    try {
-      const hex = parsed.hex as string;
-      const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(b => parseInt(b, 16)));
-      const fields = decodeProtobufFields(bytes, maxDepth || 3);
-
-      if (fields.length === 0) {
-        response.appendResponseLine('No valid protobuf fields found.');
-        response.appendResponseLine(`Raw hex: ${hex.substring(0, 200)}...`);
-        return;
-      }
-
-      response.appendResponseLine(`Decoded ${fields.length} top-level field(s):\n`);
-      response.appendResponseLine('```');
-      response.appendResponseLine(formatFields(fields));
-      response.appendResponseLine('```');
-    } catch (e) {
-      const error = e instanceof Error ? e : new Error(String(e));
-      response.appendResponseLine(`Error decoding response: ${error.message}`);
-      response.appendResponseLine(`Raw hex: ${parsed.hex.substring(0, 200)}...`);
     }
   },
 });
